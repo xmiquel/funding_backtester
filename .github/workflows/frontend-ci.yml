@@ -1,0 +1,26 @@
+name: Frontend CI
+
+on:
+  pull_request:
+    paths: ["frontend/**"]
+  push:
+    branches: [main]
+    paths: ["frontend/**"]
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm tsc --noEmit
+      - run: pnpm lint
+      - run: pnpm prettier --check src/
+      - run: pnpm knip
+      - run: pnpm test run
