@@ -1,0 +1,75 @@
+version: 2
+
+models:
+  - name: dt_tick_data
+    description: >
+      Final materialized tick data table with derived analytical columns
+      (spread, mid, aggressor flags). Full-refresh materialization.
+    columns:
+      - name: symbol
+        data_type: VARCHAR
+        description: "Futures contract symbol"
+        tests:
+          - not_null
+      - name: event_ts
+        data_type: TIMESTAMP
+        description: "Event timestamp with microsecond precision"
+        tests:
+          - not_null
+      - name: bid
+        data_type: DOUBLE
+        description: "Bid price"
+        tests:
+          - not_null
+      - name: ask
+        data_type: DOUBLE
+        description: "Ask price"
+        tests:
+          - not_null
+      - name: last
+        data_type: DOUBLE
+        description: "Last traded price"
+        tests:
+          - not_null
+      - name: volume
+        data_type: BIGINT
+        description: "Trade volume"
+        tests:
+          - not_null
+      - name: spread
+        data_type: DOUBLE
+        description: "Bid-ask spread (ask - bid)"
+        tests:
+          - not_null
+      - name: mid
+        data_type: DOUBLE
+        description: "Mid price ((bid + ask) / 2)"
+        tests:
+          - not_null
+      - name: is_aggressive_buy
+        data_type: BOOLEAN
+        description: "True when last >= ask (aggressive buy)"
+        tests:
+          - not_null
+      - name: is_aggressive_sell
+        data_type: BOOLEAN
+        description: "True when last <= bid (aggressive sell)"
+        tests:
+          - not_null
+
+  - name: tick_load_manifest
+    description: >
+      Audit manifest tracking which source files were loaded during the most
+      recent dbt build. Only records successful builds.
+    columns:
+      - name: filename
+        data_type: VARCHAR
+        description: "Source filename that was loaded"
+        tests:
+          - not_null
+          - unique
+      - name: loaded_at
+        data_type: TIMESTAMP
+        description: "Timestamp when the build occurred"
+        tests:
+          - not_null

@@ -1,0 +1,8 @@
+tick_data:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: "{{ env_var('DBT_DUCKDB_PATH', 'data/ticks.duckdb') }}"
+      schema: main
+      threads: 1

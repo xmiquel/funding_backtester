@@ -2,10 +2,10 @@ name: Backend CI
 
 on:
   pull_request:
-    paths: ["backend/**"]
+    paths: ["backend/**", "analytics/**", ".github/workflows/backend-ci.yml"]
   push:
     branches: [main]
-    paths: ["backend/**"]
+    paths: ["backend/**", "analytics/**"]
 
 jobs:
   quality:
@@ -42,4 +42,18 @@ jobs:
         with: { python-version: "3.12" }
       - uses: yezz123/setup-uv@v1
       - run: uv sync --frozen
-      - run: uv run pytest --cov --cov-fail-under=80
+      - run: uv run pytest --cov --cov-fail-under=80 --ignore=tests/test_dbt_integration.py
+
+  dbt-integration:
+    needs: quality
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - uses: yezz123/setup-uv@v1
+      - run: uv sync --frozen
+      - run: uv run pytest tests/test_dbt_integration.py -v
