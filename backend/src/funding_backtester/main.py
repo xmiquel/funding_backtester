@@ -1,5 +1,6 @@
 """Main FastAPI application for funding_backtester."""
 
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -9,7 +10,7 @@ from funding_backtester.schemas.api import RootResponse
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     from funding_backtester.database import engine
 
     yield
