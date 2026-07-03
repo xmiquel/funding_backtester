@@ -1,0 +1,38 @@
+version: 2
+
+models:
+  - name: stg_tick_data
+    description: >
+      Staging view normalizing raw tick data: derives `symbol` from filename
+      and `event_ts` from the raw timestamp parts (date + time + .NET ticks).
+    columns:
+      - name: symbol
+        data_type: VARCHAR
+        description: "Futures contract symbol derived from source filename stem"
+        tests:
+          - not_null
+      - name: event_ts
+        data_type: TIMESTAMP
+        description: "Normalized event timestamp with microsecond precision"
+        tests:
+          - not_null
+      - name: bid
+        data_type: DOUBLE
+        description: "Bid price"
+        tests:
+          - not_null
+      - name: ask
+        data_type: DOUBLE
+        description: "Ask price"
+        tests:
+          - not_null
+      - name: last
+        data_type: DOUBLE
+        description: "Last traded price"
+        tests:
+          - not_null
+      - name: volume
+        data_type: BIGINT
+        description: "Trade volume"
+        tests:
+          - not_null

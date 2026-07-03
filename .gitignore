@@ -9,3 +9,8 @@ __pycache__/
 dist/
 build/
 *.egg-info/
+/data/
+/analytics/target/
+/analytics/logs/
+/analytics/.user.yml
+/.atl/*.cache.json

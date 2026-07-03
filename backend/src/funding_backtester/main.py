@@ -1,14 +1,18 @@
 """Main FastAPI application for funding_backtester."""
 
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
-from funding_backtester.config import settings
+
 from funding_backtester.api.v1 import health
+from funding_backtester.schemas.api import RootResponse
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     from funding_backtester.database import engine
+
     yield
     await engine.dispose()
 
@@ -22,6 +26,6 @@ app = FastAPI(
 app.include_router(health.router, prefix="/api/v1", tags=["health"])
 
 
-@app.get("/")
-async def root():
-    return {"message": "funding_backtester API"}
+@app.get("/", response_model=RootResponse)
+async def root() -> RootResponse:
+    return RootResponse(message="funding_backtester API")

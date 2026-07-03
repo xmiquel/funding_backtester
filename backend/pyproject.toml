@@ -12,6 +12,8 @@ dependencies = [
     "pydantic-settings>=2.0.0",
     "alembic>=1.13.0",
     "httpx>=0.27.0",
+    "duckdb>=1.0.0",
+    "dbt-duckdb>=1.8.0",
 ]
 
 [project.optional-dependencies]
@@ -46,3 +48,5 @@ asyncio_mode = "auto"
 
 [tool.coverage.report]
 fail_under = 80
+
+

@@ -1,0 +1,30 @@
+version: 2
+
+sources:
+  - name: tick_data
+    schema: main
+    tables:
+      - name: raw_ticks
+        description: >
+          DuckDB native view over `data/raw/*.txt` using `read_csv_auto` with
+          filename passthrough. Not a dbt model — created by the loader script
+          before dbt runs.
+        columns:
+          - name: raw_timestamp
+            data_type: VARCHAR
+            description: "Raw timestamp string from NT8 export (YYYYMMDD HHMMSS.ticks)"
+          - name: bid
+            data_type: DOUBLE
+            description: "Bid price"
+          - name: ask
+            data_type: DOUBLE
+            description: "Ask price"
+          - name: last
+            data_type: DOUBLE
+            description: "Last traded price"
+          - name: volume
+            data_type: BIGINT
+            description: "Trade volume"
+          - name: filename
+            data_type: VARCHAR
+            description: "Source filename (populated by DuckDB filename passthrough)"
