@@ -1,6 +1,7 @@
 {
   "name": "funding_backtester-frontend",
   "private": true,
+  "packageManager": "pnpm@11.9.0",
   "version": "0.1.0",
   "type": "module",
   "scripts": {
