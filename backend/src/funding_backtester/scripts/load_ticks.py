@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import argparse
 import pathlib
-import subprocess
+import subprocess  # nosec B404
 import sys
 
 import duckdb
@@ -115,7 +115,7 @@ def run_dbt(project_dir: str) -> int:
 
     Returns the subprocess return code.
     """
-    result = subprocess.run(
+    result = subprocess.run(  # nosec B603 B607
         ["uv", "run", "dbt", "build"],
         cwd=project_dir,
         capture_output=True,
