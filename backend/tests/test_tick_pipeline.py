@@ -121,16 +121,17 @@ class TestEventTsDerivation:
             "data/raw/MNQ0626.txt",
             r"data\raw\MNQ0626.txt",
         ):
-            memory_db.execute("""
+            memory_db.execute(
+                """
                 CREATE TABLE raw_path AS
                 SELECT * FROM (VALUES
                     ('20260315 093001.5000000', 4500.25, 4500.50, 4500.50, 1, ?)
                 ) t(raw_timestamp, bid, ask, last, volume, filename)
-            """, [fname])
+            """,
+                [fname],
+            )
 
-            symbol = memory_db.execute(
-                _staging_sql_table("raw_path")
-            ).fetchone()[0]
+            symbol = memory_db.execute(_staging_sql_table("raw_path")).fetchone()[0]
 
             assert symbol == "MNQ0626", f"Failed for filename={fname!r}"
 

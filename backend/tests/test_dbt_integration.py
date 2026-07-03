@@ -107,12 +107,8 @@ class TestDbtBuild:
         """Raw view serves all rows from fixture TXT files."""
         conn = duckdb.connect(dbt_env)
         try:
-            row_count = conn.execute(
-                "SELECT COUNT(*) FROM raw_ticks"
-            ).fetchone()[0]
-            assert row_count == TOTAL_ROWS, (
-                f"Expected {TOTAL_ROWS} raw rows, got {row_count}"
-            )
+            row_count = conn.execute("SELECT COUNT(*) FROM raw_ticks").fetchone()[0]
+            assert row_count == TOTAL_ROWS, f"Expected {TOTAL_ROWS} raw rows, got {row_count}"
         finally:
             conn.close()
 
@@ -120,12 +116,8 @@ class TestDbtBuild:
         """Staging view has all rows from raw view."""
         conn = duckdb.connect(dbt_env)
         try:
-            row_count = conn.execute(
-                "SELECT COUNT(*) FROM stg_tick_data"
-            ).fetchone()[0]
-            assert row_count == TOTAL_ROWS, (
-                f"Expected {TOTAL_ROWS} staging rows, got {row_count}"
-            )
+            row_count = conn.execute("SELECT COUNT(*) FROM stg_tick_data").fetchone()[0]
+            assert row_count == TOTAL_ROWS, f"Expected {TOTAL_ROWS} staging rows, got {row_count}"
         finally:
             conn.close()
 
@@ -133,12 +125,8 @@ class TestDbtBuild:
         """Final materialized table has all rows."""
         conn = duckdb.connect(dbt_env)
         try:
-            row_count = conn.execute(
-                "SELECT COUNT(*) FROM dt_tick_data"
-            ).fetchone()[0]
-            assert row_count == TOTAL_ROWS, (
-                f"Expected {TOTAL_ROWS} final rows, got {row_count}"
-            )
+            row_count = conn.execute("SELECT COUNT(*) FROM dt_tick_data").fetchone()[0]
+            assert row_count == TOTAL_ROWS, f"Expected {TOTAL_ROWS} final rows, got {row_count}"
         finally:
             conn.close()
 
@@ -166,9 +154,7 @@ class TestDbtBuild:
             mnq_rows = [r for r in rows if r[0] == "MNQ0626"]
             assert len(mnq_rows) == 5
             first_ts = mnq_rows[0][1]
-            assert first_ts.microsecond == 500000, (
-                f"Expected 500000 µs, got {first_ts.microsecond}"
-            )
+            assert first_ts.microsecond == 500000, f"Expected 500000 µs, got {first_ts.microsecond}"
         finally:
             conn.close()
 
@@ -224,12 +210,8 @@ class TestDbtBuild:
                 "SELECT filename FROM tick_load_manifest ORDER BY filename"
             ).fetchall()
             filenames = [r[0] for r in rows]
-            assert any("MNQ0626" in f for f in filenames), (
-                f"MNQ0626 not in {filenames}"
-            )
-            assert any("ES0626" in f for f in filenames), (
-                f"ES0626 not in {filenames}"
-            )
+            assert any("MNQ0626" in f for f in filenames), f"MNQ0626 not in {filenames}"
+            assert any("ES0626" in f for f in filenames), f"ES0626 not in {filenames}"
         finally:
             conn.close()
 
@@ -283,15 +265,11 @@ class TestDbtBuildIdempotent:
             capture_output=True,
             text=True,
         )
-        assert result.returncode == 0, (
-            f"Second dbt build failed:\n{result.stderr}"
-        )
+        assert result.returncode == 0, f"Second dbt build failed:\n{result.stderr}"
 
         conn = duckdb.connect(db_path)
         try:
-            row_count = conn.execute(
-                "SELECT COUNT(*) FROM dt_tick_data"
-            ).fetchone()[0]
+            row_count = conn.execute("SELECT COUNT(*) FROM dt_tick_data").fetchone()[0]
             assert row_count == TOTAL_ROWS, (
                 f"Expected {TOTAL_ROWS} rows after re-run, got {row_count}"
             )
