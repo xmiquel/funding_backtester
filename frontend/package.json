@@ -27,6 +27,21 @@
     "tailwindcss-animate": "^1.0.0",
     "zustand": "^5.0.0"
   },
+  "knip": {
+    "ignoreDependencies": [
+      "class-variance-authority",
+      "clsx",
+      "lucide-react",
+      "tailwind-merge",
+      "zustand",
+      "@testing-library/jest-dom",
+      "@testing-library/react"
+    ],
+    "ignore": [
+      "src/lib/utils.ts",
+      "src/stores/useAppStore.ts"
+    ]
+  },
   "devDependencies": {
     "@eslint/js": "^9.0.0",
     "@testing-library/jest-dom": "^6.0.0",
