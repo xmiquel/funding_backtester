@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { apiClient } from "../api/client";
+import { apiClient } from "@/api/client";
 
 export default function Home() {
   const { data, isLoading } = useQuery({
@@ -7,7 +7,12 @@ export default function Home() {
     queryFn: () => apiClient.get("/api/v1/health").then((r) => r.data),
   });
 
-  if (isLoading) return <div className="flex h-screen items-center justify-center">Loading...</div>;
+  if (isLoading)
+    return (
+      <div className="flex h-screen items-center justify-center">
+        Loading...
+      </div>
+    );
 
   return (
     <main className="flex h-screen flex-col items-center justify-center gap-4">
