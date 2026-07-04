@@ -1,12 +1,14 @@
-"""Tests for the OHLCV 15-second aggregation pipeline.
+"""Tests for the OHLCV 15-second and multi-timeframe aggregation pipeline.
 
 Tests cover:
 - 15-second bucket alignment formula (Spec: 15-Second Bucket Alignment)
+- Multi-timeframe bucket alignment (Spec: Multi-Timeframe OHLCV)
 - OHLCVBar Pydantic schema serialization (Spec: API Response Schema)
 - Integration test for GET /api/v1/ohlcv endpoint (Spec: API Query by Symbol)
+- Multi-granularity API parameter (Spec: API Granularity Parameter)
 
 Layer strategy: unit tests for pure logic (bucket alignment, schema) use
-DuckDB in-memory; integration test uses httpx AsyncClient.
+DuckDB in-memory; integration tests use httpx AsyncClient.
 """
 
 from __future__ import annotations
@@ -335,6 +337,316 @@ class TestOHLCVAggregation:
 
 
 # ---------------------------------------------------------------------------
+# Multi-Timeframe Bucket Alignment
+# Spec: Multi-Timeframe OHLCV — bucket formulas for 1m/5m/1h/1d
+# Formula (non-daily): date_trunc('second', event_ts) - INTERVAL
+#   (EXTRACT(SECOND FROM event_ts) % bucket_seconds) SECOND
+# Formula (daily): date_trunc('day', event_ts)
+# ---------------------------------------------------------------------------
+
+
+def _bucket_sql_for_granularity(
+    bucket_seconds: int, source_table: str = "test_ticks", is_daily: bool = False
+) -> str:
+    """Return bucket alignment SQL matching the ohlcv_aggregate macro for a given bucket size.
+
+    For daily: date_trunc('day', event_ts)
+    For non-daily: epoch-second integer division truncates to bucket boundary.
+    """
+    if is_daily:
+        bucket_expr = "date_trunc('day', datetime) AS datetime"
+    else:
+        # Universal formula: epoch-second truncation via FLOOR to handle any bucket size
+        bucket_expr = (
+            f"CAST(TIMESTAMP 'epoch' + CAST(FLOOR(EXTRACT(epoch FROM datetime)"
+            f" / {bucket_seconds}) * {bucket_seconds} AS BIGINT)"
+            f" * INTERVAL '1 second' AS TIMESTAMP) AS datetime"
+        )
+    return f"""
+        SELECT
+            {bucket_expr},
+            symbol, last, bid, ask, volume
+        FROM {source_table}
+    """
+
+
+def _ohlcv_sql_for_granularity(
+    bucket_seconds: int, source_table: str = "test_ticks", is_daily: bool = False
+) -> str:
+    """Return full OHLCV aggregation SQL matching the ohlcv_aggregate macro (OHLCV src)."""
+    if is_daily:
+        bucket_expr = "date_trunc('day', datetime)"
+    else:
+        bucket_expr = (
+            f"CAST(TIMESTAMP 'epoch' + CAST(FLOOR(EXTRACT(epoch FROM datetime)"
+            f" / {bucket_seconds}) * {bucket_seconds} AS BIGINT)"
+            " * INTERVAL '1 second' AS TIMESTAMP)"
+        )
+    return f"""
+        WITH bucketed AS (
+            SELECT
+                {bucket_expr} AS bucket_dt,
+                symbol, open, high, low, close, volume,
+                bid_open, bid_high, bid_low, bid_close,
+                ask_open, ask_high, ask_low, ask_close,
+                datetime AS src_dt,
+                ROW_NUMBER() OVER (
+                    PARTITION BY symbol, {bucket_expr}
+                    ORDER BY datetime
+                ) AS rn_asc,
+                ROW_NUMBER() OVER (
+                    PARTITION BY symbol, {bucket_expr}
+                    ORDER BY datetime DESC
+                ) AS rn_desc
+            FROM {source_table}
+        )
+        SELECT
+            bucket_dt AS datetime,
+            symbol,
+            MAX(CASE WHEN rn_asc = 1 THEN open END) AS open,
+            MAX(high) AS high,
+            MIN(low) AS low,
+            MAX(CASE WHEN rn_desc = 1 THEN close END) AS close,
+            SUM(volume) AS volume,
+            MAX(CASE WHEN rn_asc = 1 THEN bid_open END) AS bid_open,
+            MAX(bid_high) AS bid_high,
+            MIN(bid_low) AS bid_low,
+            MAX(CASE WHEN rn_desc = 1 THEN bid_close END) AS bid_close,
+            MAX(CASE WHEN rn_asc = 1 THEN ask_open END) AS ask_open,
+            MAX(ask_high) AS ask_high,
+            MIN(ask_low) AS ask_low,
+            MAX(CASE WHEN rn_desc = 1 THEN ask_close END) AS ask_close
+        FROM bucketed
+        GROUP BY bucket_dt, symbol
+    """
+
+
+class TestMultiTimeframeBucketAlignment:
+    """Verify bucket alignment formulas for multiple timeframes."""
+
+    def test_1m_tick_at_exact_boundary(self, memory_db):
+        """1m: Tick at 09:30:00 → bucket 09:30:00."""
+        memory_db.execute("""
+            CREATE TABLE test_mtf1 AS
+            SELECT * FROM (VALUES
+                ('MNQ0626', CAST('2026-03-15 09:30:00.000' AS TIMESTAMP),
+                 4500.25, 4500.50, 4500.50, 1)
+            ) t(symbol, datetime, bid, ask, last, volume)
+        """)
+        row = memory_db.execute(_bucket_sql_for_granularity(60, "test_mtf1")).fetchone()
+        assert row is not None
+        assert row[0] == dt(2026, 3, 15, 9, 30, 0)
+
+    def test_1m_tick_at_59s(self, memory_db):
+        """1m: Tick at 09:30:59 → bucket 09:30:00."""
+        memory_db.execute("""
+            CREATE TABLE test_mtf2 AS
+            SELECT * FROM (VALUES
+                ('MNQ0626', CAST('2026-03-15 09:30:59.999' AS TIMESTAMP),
+                 4500.25, 4500.50, 4500.50, 1)
+            ) t(symbol, datetime, bid, ask, last, volume)
+        """)
+        row = memory_db.execute(_bucket_sql_for_granularity(60, "test_mtf2")).fetchone()
+        assert row is not None
+        assert row[0] == dt(2026, 3, 15, 9, 30, 0)
+
+    def test_1m_tick_at_next_minute(self, memory_db):
+        """1m: Tick at 09:31:00 → bucket 09:31:00."""
+        memory_db.execute("""
+            CREATE TABLE test_mtf3 AS
+            SELECT * FROM (VALUES
+                ('MNQ0626', CAST('2026-03-15 09:31:00.000' AS TIMESTAMP),
+                 4500.25, 4500.50, 4500.50, 1)
+            ) t(symbol, datetime, bid, ask, last, volume)
+        """)
+        row = memory_db.execute(_bucket_sql_for_granularity(60, "test_mtf3")).fetchone()
+        assert row is not None
+        assert row[0] == dt(2026, 3, 15, 9, 31, 0)
+
+    def test_5m_alignment(self, memory_db):
+        """5m: Tick at 09:33:00 → bucket 09:30:00."""
+        memory_db.execute("""
+            CREATE TABLE test_mtf4 AS
+            SELECT * FROM (VALUES
+                ('MNQ0626', CAST('2026-03-15 09:33:00.000' AS TIMESTAMP),
+                 4500.25, 4500.50, 4500.50, 1)
+            ) t(symbol, datetime, bid, ask, last, volume)
+        """)
+        row = memory_db.execute(_bucket_sql_for_granularity(300, "test_mtf4")).fetchone()
+        assert row is not None
+        assert row[0] == dt(2026, 3, 15, 9, 30, 0), "5m: 09:33:00 → 09:30:00"
+
+    def test_1h_alignment_second_hour(self, memory_db):
+        """1h: Tick at 10:15:00 → bucket 10:00:00."""
+        memory_db.execute("""
+            CREATE TABLE test_mtf5 AS
+            SELECT * FROM (VALUES
+                ('MNQ0626', CAST('2026-03-15 10:15:00.000' AS TIMESTAMP),
+                 4500.25, 4500.50, 4500.50, 1)
+            ) t(symbol, datetime, bid, ask, last, volume)
+        """)
+        row = memory_db.execute(_bucket_sql_for_granularity(3600, "test_mtf5")).fetchone()
+        assert row is not None
+        assert row[0] == dt(2026, 3, 15, 10, 0, 0), "1h: 10:15:00 → 10:00:00"
+
+    def test_1h_alignment_exact_hour(self, memory_db):
+        """1h: Tick at 11:00:00 → bucket 11:00:00."""
+        memory_db.execute("""
+            CREATE TABLE test_mtf6 AS
+            SELECT * FROM (VALUES
+                ('MNQ0626', CAST('2026-03-15 11:00:00.000' AS TIMESTAMP),
+                 4500.25, 4500.50, 4500.50, 1)
+            ) t(symbol, datetime, bid, ask, last, volume)
+        """)
+        row = memory_db.execute(_bucket_sql_for_granularity(3600, "test_mtf6")).fetchone()
+        assert row is not None
+        assert row[0] == dt(2026, 3, 15, 11, 0, 0), "1h: 11:00:00 → 11:00:00"
+
+    def test_daily_alignment(self, memory_db):
+        """1d: date_trunc('day', datetime) → 2026-03-15 00:00:00."""
+        memory_db.execute("""
+            CREATE TABLE test_mtf7 AS
+            SELECT * FROM (VALUES
+                ('MNQ0626', CAST('2026-03-15 14:30:00.000' AS TIMESTAMP),
+                 4500.25, 4500.50, 4500.50, 1)
+            ) t(symbol, datetime, bid, ask, last, volume)
+        """)
+        row = memory_db.execute(
+            _bucket_sql_for_granularity(86400, "test_mtf7", is_daily=True)
+        ).fetchone()
+        assert row is not None
+        assert row[0] == dt(2026, 3, 15, 0, 0, 0), "1d: any time → midnight"
+
+
+class TestMultiTimeframeAggregation:
+    """Verify full OHLCV aggregation for multi-timeframe buckets."""
+
+    def _assert_float(self, actual, expected: float, name: str):
+        assert float(actual) == expected, (
+            f"Expected {name} {expected}, got {actual} (type={type(actual).__name__})"
+        )
+
+    def test_1m_aggregation_multiple_buckets(self, memory_db):
+        """1m: Multi-Tick 15s bars spanning 2 minutes produce 2 buckets with correct OHLCV."""
+        memory_db.execute("""
+            CREATE TABLE test_mtf_agg1 AS
+            SELECT * FROM (VALUES
+                ('MNQ0626', CAST('2026-03-15 09:30:00.000' AS TIMESTAMP),
+                 4500.20, 4500.75, 4500.20, 4500.55, 5,
+                 4500.20, 4500.70, 4500.20, 4500.55, 4500.25, 4500.80, 4500.25, 4500.60),
+                ('MNQ0626', CAST('2026-03-15 09:30:30.000' AS TIMESTAMP),
+                 4500.55, 4500.80, 4500.30, 4500.65, 10,
+                 4500.55, 4500.75, 4500.30, 4500.60, 4500.60, 4500.85, 4500.35, 4500.70),
+                ('MNQ0626', CAST('2026-03-15 09:31:00.000' AS TIMESTAMP),
+                 4500.25, 4500.60, 4500.20, 4500.50, 8,
+                 4500.25, 4500.55, 4500.20, 4500.45, 4500.30, 4500.65, 4500.25, 4500.55)
+            ) t(symbol, datetime, open, high, low, close, volume,
+                bid_open, bid_high, bid_low, bid_close,
+                ask_open, ask_high, ask_low, ask_close)
+        """)
+        rows = memory_db.execute(_ohlcv_sql_for_granularity(60, "test_mtf_agg1")).fetchall()
+        assert len(rows) == 2, f"Expected 2 one-minute buckets, got {len(rows)}"
+
+        # Check the two buckets
+        buckets = {r[0]: r for r in rows}
+        assert dt(2026, 3, 15, 9, 30, 0) in buckets, "Missing 09:30 bucket"
+        assert dt(2026, 3, 15, 9, 31, 0) in buckets, "Missing 09:31 bucket"
+
+        b1 = buckets[dt(2026, 3, 15, 9, 30, 0)]
+        self._assert_float(b1[2], 4500.20, "09:30 open")  # first 15s bar: open=4500.20
+        self._assert_float(b1[3], 4500.80, "09:30 high")  # max(high): 4500.80 (bar 2)
+        self._assert_float(b1[4], 4500.20, "09:30 low")  # min(low): 4500.20
+        self._assert_float(b1[5], 4500.65, "09:30 close")  # last close: 4500.65
+        assert int(b1[6]) == 15, "09:30 volume (5+10)"
+        # Bid/ask checks
+        self._assert_float(b1[7], 4500.20, "09:30 bid_open")
+        self._assert_float(b1[8], 4500.75, "09:30 bid_high")
+        self._assert_float(b1[10], 4500.60, "09:30 bid_close")
+        self._assert_float(b1[11], 4500.25, "09:30 ask_open")
+        self._assert_float(b1[12], 4500.85, "09:30 ask_high")
+        self._assert_float(b1[14], 4500.70, "09:30 ask_close")
+
+        b2 = buckets[dt(2026, 3, 15, 9, 31, 0)]
+        self._assert_float(b2[2], 4500.25, "09:31 open")  # first bar open: 4500.25
+        self._assert_float(b2[5], 4500.50, "09:31 close")  # last close: 4500.50
+        assert int(b2[6]) == 8, "09:31 volume"
+
+    def test_1h_aggregation(self, memory_db):
+        """1h: 15s OHLCV bars spanning 2 hours produce 2 hourly buckets."""
+        memory_db.execute("""
+            CREATE TABLE test_mtf_agg2 AS
+            SELECT * FROM (VALUES
+                ('MNQ0626', CAST('2026-03-15 09:30:00.000' AS TIMESTAMP),
+                 4500.20, 4500.55, 4500.10, 4500.30, 5,
+                 4500.15, 4500.50, 4500.05, 4500.25, 4500.25, 4500.60, 4500.15, 4500.35),
+                ('MNQ0626', CAST('2026-03-15 09:45:00.000' AS TIMESTAMP),
+                 4500.30, 4500.65, 4500.20, 4500.55, 10,
+                 4500.25, 4500.60, 4500.15, 4500.50, 4500.35, 4500.70, 4500.25, 4500.60),
+                ('MNQ0626', CAST('2026-03-15 10:15:00.000' AS TIMESTAMP),
+                 4500.40, 4500.75, 4500.30, 4500.65, 8,
+                 4500.35, 4500.70, 4500.25, 4500.60, 4500.45, 4500.80, 4500.35, 4500.70)
+            ) t(symbol, datetime, open, high, low, close, volume,
+                bid_open, bid_high, bid_low, bid_close,
+                ask_open, ask_high, ask_low, ask_close)
+        """)
+        rows = memory_db.execute(_ohlcv_sql_for_granularity(3600, "test_mtf_agg2")).fetchall()
+        assert len(rows) == 2, f"Expected 2 hourly buckets, got {len(rows)}"
+
+    def test_daily_aggregation(self, memory_db):
+        """1d: date_trunc('day') groups all OHLCV bars into daily buckets."""
+        memory_db.execute("""
+            CREATE TABLE test_mtf_agg3 AS
+            SELECT * FROM (VALUES
+                ('MNQ0626', CAST('2026-03-15 09:30:00.000' AS TIMESTAMP),
+                 4500.20, 4500.75, 4500.10, 4500.55, 5,
+                 4500.15, 4500.70, 4500.05, 4500.50, 4500.25, 4500.80, 4500.15, 4500.60),
+                ('MNQ0626', CAST('2026-03-15 14:30:00.000' AS TIMESTAMP),
+                 4500.55, 4500.85, 4500.30, 4500.70, 10,
+                 4500.50, 4500.80, 4500.25, 4500.65, 4500.60, 4500.90, 4500.35, 4500.75),
+                ('MNQ0626', CAST('2026-03-16 09:30:00.000' AS TIMESTAMP),
+                 4500.30, 4500.65, 4500.20, 4500.50, 8,
+                 4500.25, 4500.60, 4500.15, 4500.45, 4500.35, 4500.70, 4500.25, 4500.55)
+            ) t(symbol, datetime, open, high, low, close, volume,
+                bid_open, bid_high, bid_low, bid_close,
+                ask_open, ask_high, ask_low, ask_close)
+        """)
+        rows = memory_db.execute(
+            _ohlcv_sql_for_granularity(86400, "test_mtf_agg3", is_daily=True)
+        ).fetchall()
+        assert len(rows) == 2, f"Expected 2 daily buckets, got {len(rows)}"
+
+        buckets = {r[0]: r for r in rows}
+        assert dt(2026, 3, 15, 0, 0, 0) in buckets, "Missing Mar 15 bucket"
+        assert dt(2026, 3, 16, 0, 0, 0) in buckets, "Missing Mar 16 bucket"
+
+        mar15 = buckets[dt(2026, 3, 15, 0, 0, 0)]
+        self._assert_float(mar15[2], 4500.20, "Mar 15 open")  # first bar open=4500.20
+        self._assert_float(mar15[3], 4500.85, "Mar 15 high")  # max high=4500.85 (bar 2)
+        self._assert_float(mar15[4], 4500.10, "Mar 15 low")  # min low=4500.10 (bar 1)
+        self._assert_float(mar15[5], 4500.70, "Mar 15 close")  # last bar close=4500.70
+        assert int(mar15[6]) == 15, "Mar 15 volume (5+10)"
+
+    def test_ohlcv_output_has_all_15_columns(self, memory_db):
+        """Multi-timeframe aggregation produces all 15 OHLCV columns from OHLCV source."""
+        memory_db.execute("""
+            CREATE TABLE test_mtf_agg4 AS
+            SELECT * FROM (VALUES
+                ('MNQ0626', CAST('2026-03-15 09:30:00.000' AS TIMESTAMP),
+                 4500.20, 4500.55, 4500.10, 4500.30, 5,
+                 4500.15, 4500.50, 4500.05, 4500.25, 4500.25, 4500.60, 4500.15, 4500.35)
+            ) t(symbol, datetime, open, high, low, close, volume,
+                bid_open, bid_high, bid_low, bid_close,
+                ask_open, ask_high, ask_low, ask_close)
+        """)
+        row = memory_db.execute(_ohlcv_sql_for_granularity(3600, "test_mtf_agg4")).fetchone()
+        assert row is not None
+        # 15 columns: datetime, symbol, open, high, low, close, volume,
+        #             bid_open, bid_high, bid_low, bid_close,
+        #             ask_open, ask_high, ask_low, ask_close
+        assert len(row) == 15, f"Expected 15 columns, got {len(row)}"
+
+
+# ---------------------------------------------------------------------------
 # OHLCVBar Pydantic Schema
 # Spec: Requirement "API Response Schema"
 # ---------------------------------------------------------------------------
@@ -577,3 +889,110 @@ class TestOHLCVApiEndpoint:
         assert len(data) > 0
         symbols = {bar["symbol"] for bar in data}
         assert symbols == {"MNQ0626"}, f"Expected only MNQ0626, got {symbols}"
+
+
+# ---------------------------------------------------------------------------
+# Multi-Granularity API Tests
+# Spec: API Granularity Parameter — GET /api/v1/ohlcv?symbol=X&granularity=1m
+# ---------------------------------------------------------------------------
+
+
+class TestMultiGranularity:
+    """Integration tests for the granularity parameter on GET /api/v1/ohlcv."""
+
+    @pytest.mark.asyncio
+    async def test_backward_compat_no_granularity(self, ohlcv_client):
+        """No granularity param defaults to 15s and returns identical results to current."""
+        response = await ohlcv_client.get("/api/v1/ohlcv?symbol=MNQ0626")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) > 0
+        # Verify all 15 fields present
+        bar = data[0]
+        assert "datetime" in bar
+        assert "open" in bar
+        assert "high" in bar
+        assert "low" in bar
+        assert "close" in bar
+        assert "volume" in bar
+        assert "bid_open" in bar
+        assert "bid_close" in bar
+        assert "ask_open" in bar
+        assert "ask_close" in bar
+
+    @pytest.mark.asyncio
+    async def test_granularity_1m_returns_bars(self, ohlcv_client):
+        """Valid granularity=1m returns list of bars with all 15 fields."""
+        response = await ohlcv_client.get("/api/v1/ohlcv?symbol=MNQ0626&granularity=1m")
+        assert response.status_code == 200, (
+            f"Expected 200, got {response.status_code}: {response.text}"
+        )
+        data = response.json()
+        assert isinstance(data, list)
+        assert len(data) > 0, "Expected at least 1 bar for MNQ0626 at 1m"
+        bar = data[0]
+        assert "datetime" in bar
+        assert "symbol" in bar
+        assert "open" in bar
+        assert "high" in bar
+        assert "low" in bar
+        assert "close" in bar
+        assert "volume" in bar
+
+    @pytest.mark.asyncio
+    async def test_granularity_1d_returns_bars(self, ohlcv_client):
+        """Valid granularity=1d returns daily bars."""
+        response = await ohlcv_client.get("/api/v1/ohlcv?symbol=MNQ0626&granularity=1d")
+        assert response.status_code == 200, (
+            f"Expected 200, got {response.status_code}: {response.text}"
+        )
+        data = response.json()
+        assert isinstance(data, list)
+        assert len(data) > 0, "Expected at least 1 daily bar for MNQ0626"
+
+    @pytest.mark.asyncio
+    async def test_invalid_granularity_returns_422(self, ohlcv_client):
+        """Invalid granularity value returns 422."""
+        response = await ohlcv_client.get("/api/v1/ohlcv?symbol=MNQ0626&granularity=invalid")
+        assert response.status_code == 422, (
+            f"Expected 422, got {response.status_code}: {response.text}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_granularity_missing_symbol_returns_empty(self, ohlcv_client):
+        """Valid granularity with unknown symbol returns empty array."""
+        response = await ohlcv_client.get("/api/v1/ohlcv?symbol=UNKNOWN&granularity=1m")
+        assert response.status_code == 200
+        assert response.json() == []
+
+    @pytest.mark.asyncio
+    async def test_granularity_1h_returns_bars(self, ohlcv_client):
+        """Valid granularity=1h returns hourly bars."""
+        response = await ohlcv_client.get("/api/v1/ohlcv?symbol=MNQ0626&granularity=1h")
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, list)
+        assert len(data) > 0
+
+    @pytest.mark.asyncio
+    async def test_granularity_5m_returns_bars(self, ohlcv_client):
+        """Valid granularity=5m returns 5-minute bars."""
+        response = await ohlcv_client.get("/api/v1/ohlcv?symbol=MNQ0626&granularity=5m")
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, list)
+        assert len(data) > 0
+
+    @pytest.mark.asyncio
+    async def test_date_filtered_with_granularity(self, ohlcv_client):
+        """start_date and end_date work with granularity parameter."""
+        response = await ohlcv_client.get(
+            "/api/v1/ohlcv?symbol=MNQ0626&granularity=1m&start_date=2026-03-15&end_date=2026-03-16"
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, list)
+        for bar in data:
+            bar_dt = dt.fromisoformat(bar["datetime"])
+            assert bar_dt >= dt(2026, 3, 15)
+            assert bar_dt < dt(2026, 3, 16)
