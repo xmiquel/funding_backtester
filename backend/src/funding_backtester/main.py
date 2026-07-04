@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from funding_backtester.api.v1 import health
+from funding_backtester.api.v1 import health, ohlcv
 from funding_backtester.schemas.api import RootResponse
 
 
@@ -24,6 +24,7 @@ app = FastAPI(
 )
 
 app.include_router(health.router, prefix="/api/v1", tags=["health"])
+app.include_router(ohlcv.router, prefix="/api/v1", tags=["ohlcv"])
 
 
 @app.get("/", response_model=RootResponse)

@@ -23,7 +23,7 @@ def parse_tick_line(line: str) -> dict[str, str | float | int] | None:
     """Parse a single NT8 Tick Replay line into a dict of typed values.
 
     Expected format (semicolon-delimited):
-        raw_timestamp;bid;ask;last;volume
+        raw_timestamp;ask;bid;last;volume
 
     Returns None if the line is empty or malformed.
     """
@@ -35,7 +35,7 @@ def parse_tick_line(line: str) -> dict[str, str | float | int] | None:
     if len(parts) < 5:
         return None
 
-    raw_ts, bid_str, ask_str, last_str, vol_str = parts[:5]
+    raw_ts, ask_str, bid_str, last_str, vol_str = parts[:5]
 
     try:
         bid = float(bid_str)
@@ -73,40 +73,41 @@ def scan_tick_files(data_dir: str) -> list[pathlib.Path]:
     return files
 
 
-def create_raw_view(conn: duckdb.DuckDBPyConnection) -> None:
-    """Create or replace the ``raw_ticks`` view over ``data/raw/*.txt``.
+def create_raw_view(conn: duckdb.DuckDBPyConnection, data_dir: str) -> None:
+    """Create or replace the ``raw_ticks`` view over ``*.txt`` in *data_dir*.
 
     The view uses ``read_csv_auto`` with filename passthrough and exposes
-    five columns: raw_timestamp, bid, ask, last, volume, and filename.
+    five columns: raw_timestamp, ask, bid, last, volume, and filename.
     """
+    glob_pattern = str(pathlib.Path(data_dir, "*.txt").resolve())
     conn.execute(
-        """
+        f"""
         CREATE OR REPLACE VIEW raw_ticks AS
         SELECT * FROM read_csv_auto(
-            'data/raw/*.txt',
+            '{glob_pattern}',
             delim=';',
             header=false,
-            columns={
+            columns={{
                 'raw_timestamp': 'VARCHAR',
-                'bid': 'DOUBLE',
                 'ask': 'DOUBLE',
+                'bid': 'DOUBLE',
                 'last': 'DOUBLE',
                 'volume': 'BIGINT'
-            },
+            }},
             filename=true
         )
         """
     )
 
 
-def bootstrap_duckdb(db_path: str) -> duckdb.DuckDBPyConnection:
+def bootstrap_duckdb(db_path: str, data_dir: str) -> duckdb.DuckDBPyConnection:
     """Connect to (or create) the DuckDB database at *db_path* and bootstrap
-    the ``raw_ticks`` view.
+    the ``raw_ticks`` view over *data_dir*.
 
     Returns the open connection.
     """
     conn = duckdb.connect(db_path)
-    create_raw_view(conn)
+    create_raw_view(conn, data_dir)
     return conn
 
 
@@ -163,7 +164,7 @@ def main() -> int:
     print(f"Discovered {len(files)} tick file(s) in {args.data_dir}")
 
     # 2. Bootstrap DuckDB + raw view
-    conn = bootstrap_duckdb(args.duckdb_path)
+    conn = bootstrap_duckdb(args.duckdb_path, args.data_dir)
     conn.close()
     print(f"DuckDB database ready at {args.duckdb_path}")
 

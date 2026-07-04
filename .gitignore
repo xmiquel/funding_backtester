@@ -14,3 +14,4 @@ build/
 /analytics/logs/
 /analytics/.user.yml
 /.atl/*.cache.json
+.codegraph/
