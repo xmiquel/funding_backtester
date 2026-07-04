@@ -48,7 +48,7 @@ def _build_query_sql(table_name: str) -> str:
     """
     if table_name not in _ALLOWED_TABLES:
         raise ValueError(f"Unexpected table name: {table_name}")
-    return f"""
+    return f"""  # nosec - table_name validated against _ALLOWED_TABLES allow-list
         SELECT datetime, symbol, open, high, low, close, volume,
                bid_open, bid_high, bid_low, bid_close,
                ask_open, ask_high, ask_low, ask_close
