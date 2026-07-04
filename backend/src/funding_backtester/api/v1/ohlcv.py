@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import datetime
+from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 
 from funding_backtester.config import settings
 from funding_backtester.schemas.api import OHLCVBar
@@ -12,7 +13,9 @@ from funding_backtester.services.duckdb_client import DuckDBClient
 
 router = APIRouter(prefix="/api/v1")
 
-_GRANULARITY_MAP: dict[str, str] = {
+Granularity = Literal["15s", "1m", "3m", "5m", "15m", "1h", "3h", "4h", "1d"]
+
+_GRANULARITY_MAP: dict[Granularity, str] = {
     "15s": "ohlcv_15s",
     "1m": "ohlcv_1m",
     "3m": "ohlcv_3m",
@@ -24,7 +27,6 @@ _GRANULARITY_MAP: dict[str, str] = {
     "1d": "ohlcv_1d",
 }
 
-_VALID_GRANULARITIES = set(_GRANULARITY_MAP)
 _ALLOWED_TABLES = set(_GRANULARITY_MAP.values())
 
 # Singleton DuckDB client — lazy initialized on first request
@@ -48,22 +50,22 @@ def _build_query_sql(table_name: str) -> str:
     """
     if table_name not in _ALLOWED_TABLES:
         raise ValueError(f"Unexpected table name: {table_name}")
-    return f"""  # nosec - table_name validated against _ALLOWED_TABLES allow-list
-        SELECT datetime, symbol, open, high, low, close, volume,
-               bid_open, bid_high, bid_low, bid_close,
-               ask_open, ask_high, ask_low, ask_close
-        FROM {table_name}
-        WHERE symbol = ?
-          AND datetime >= ?
-          AND datetime < ?
-        ORDER BY datetime ASC
-    """
+    return (
+        "SELECT datetime, symbol, open, high, low, close, volume,\n"
+        "       bid_open, bid_high, bid_low, bid_close,\n"
+        "       ask_open, ask_high, ask_low, ask_close\n"
+        f"FROM {table_name}\n"  # nosec B608 — allow-list validated above
+        "WHERE symbol = ?\n"
+        "  AND datetime >= ?\n"
+        "  AND datetime < ?\n"
+        "ORDER BY datetime ASC\n"
+    )
 
 
 @router.get("/ohlcv", response_model=list[OHLCVBar])
 async def get_ohlcv(
     symbol: str = Query(..., description="Futures contract symbol"),  # noqa: B008
-    granularity: str = Query(  # noqa: B008
+    granularity: Granularity = Query(  # noqa: B008
         "15s", description="OHLCV bar granularity (15s, 1m, 3m, 5m, 15m, 1h, 3h, 4h, 1d)"
     ),
     start_date: datetime.date | None = Query(  # noqa: B008
@@ -76,25 +78,8 @@ async def get_ohlcv(
 ) -> list[OHLCVBar]:
     """Return OHLCV bars for a symbol at the specified granularity.
 
-    Supports: 15s, 1m, 3m, 5m, 15m, 1h, 3h, 4h, 1d.
     Results are sorted by datetime ascending.
-
-    Raises HTTP 422 if granularity is not in the supported set.
     """
-    if granularity not in _VALID_GRANULARITIES:
-        valid = ", ".join(sorted(_VALID_GRANULARITIES))
-        raise HTTPException(
-            status_code=422,
-            detail=[
-                {
-                    "type": "enum",
-                    "loc": ("query", "granularity"),
-                    "msg": f"Invalid granularity '{granularity}'. Must be one of: {valid}",
-                    "input": granularity,
-                }
-            ],
-        )
-
     table_name = _GRANULARITY_MAP[granularity]
     query_sql = _build_query_sql(table_name)
 
