@@ -30,9 +30,7 @@ def _find_repo_root() -> Path:
     for parent in [current] + list(current.parents):
         if (parent / ".git").is_dir() and (parent / "backend" / "pyproject.toml").exists():
             return parent
-    raise FileNotFoundError(
-        "Could not find repo root (looking for .git/ + backend/pyproject.toml)"
-    )
+    raise FileNotFoundError("Could not find repo root (looking for .git/ + backend/pyproject.toml)")
 
 
 def duckdb_path() -> Path:

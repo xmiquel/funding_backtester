@@ -23,17 +23,13 @@ class TestFindRepoRoot:
     def test_contains_git_directory(self):
         """The returned directory contains .git."""
         root = _find_repo_root()
-        assert (root / ".git").is_dir(), (
-            f".git not found in {root}"
-        )
+        assert (root / ".git").is_dir(), f".git not found in {root}"
 
     def test_contains_backend_pyproject_toml(self):
         """The returned directory contains backend/pyproject.toml."""
         root = _find_repo_root()
         p = root / "backend" / "pyproject.toml"
-        assert p.exists(), (
-            f"backend/pyproject.toml not found in {root}"
-        )
+        assert p.exists(), f"backend/pyproject.toml not found in {root}"
         content = p.read_text()
         assert "[project]" in content
         assert 'name = "funding_backtester"' in content
@@ -59,14 +55,10 @@ class TestDuckdbPath:
         """duckdb_path is a child of the repo root."""
         root = _find_repo_root()
         result = duckdb_path()
-        assert str(result).startswith(str(root)), (
-            f"Expected {result} to be under repo root {root}"
-        )
+        assert str(result).startswith(str(root)), f"Expected {result} to be under repo root {root}"
 
     def test_duckdb_path_concatenation(self):
         """duckdb_path is exactly <repo_root>/data/ticks.duckdb."""
         root = _find_repo_root()
         expected = root / "data" / "ticks.duckdb"
-        assert duckdb_path() == expected, (
-            f"Expected {expected}, got {duckdb_path()}"
-        )
+        assert duckdb_path() == expected, f"Expected {expected}, got {duckdb_path()}"
