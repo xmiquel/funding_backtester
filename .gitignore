@@ -18,3 +18,5 @@ build/
 .pi/
 backend/data/
 backend/.coverage
+# Local Pi runtime state
+.atl/
