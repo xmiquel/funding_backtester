@@ -1,0 +1,10 @@
+{{ config(materialized='incremental', unique_key=['datetime', 'symbol']) }}
+
+{{ ohlcv_aggregate(
+    bucket_seconds=60,
+    source_ref=ref('ohlcv_15s')
+) }}
+
+{% if is_incremental() %}
+WHERE datetime > (SELECT MAX(datetime) FROM {{ this }}) - INTERVAL '120' SECOND
+{% endif %}
