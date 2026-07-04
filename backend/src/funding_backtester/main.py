@@ -23,8 +23,8 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-app.include_router(health.router, prefix="/api/v1", tags=["health"])
-app.include_router(ohlcv.router, prefix="/api/v1", tags=["ohlcv"])
+app.include_router(health.router, tags=["health"])
+app.include_router(ohlcv.router, tags=["ohlcv"])
 
 
 @app.get("/", response_model=RootResponse)
