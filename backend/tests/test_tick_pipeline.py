@@ -250,7 +250,7 @@ class TestAggressorLogic:
 class TestNt8FileValidation:
     """Verify NT8 file format detection and validation."""
 
-    VALID_HEADER_LINE = "20260315 093001.5000000;4500.25;4500.50;4500.50;1\n"
+    VALID_HEADER_LINE = "20260315 093001.5000000;4500.50;4500.25;4500.50;1\n"
 
     def _write_file(self, tmp: pathlib.Path, name: str, content: str) -> pathlib.Path:
         p = tmp / name
@@ -287,7 +287,7 @@ class TestNt8FileValidation:
         """Line with non-numeric price returns None."""
         from funding_backtester.scripts.load_ticks import parse_tick_line
 
-        assert parse_tick_line("20260315 093001;abc;4500.50;4500.50;1\n") is None
+        assert parse_tick_line("20260315 093001;4500.50;abc;4500.50;1\n") is None
 
     def test_empty_line(self):
         """Empty line returns None."""

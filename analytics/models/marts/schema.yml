@@ -57,6 +57,62 @@ models:
         tests:
           - not_null
 
+  - name: ohlcv_15s
+    description: >
+      15-second OHLCV bars aggregated from dt_tick_data. Incremental
+      materialization with unique_key=(datetime, symbol). Includes
+      last-traded, bid, and ask OHLCV mirrors.
+    columns:
+      - name: datetime
+        data_type: TIMESTAMP
+        description: "15-second bucket boundary with second precision"
+        tests:
+          - not_null
+      - name: symbol
+        data_type: VARCHAR
+        description: "Futures contract symbol"
+        tests:
+          - not_null
+      - name: open
+        data_type: DOUBLE
+        description: "First traded price in the bucket"
+      - name: high
+        data_type: DOUBLE
+        description: "Highest traded price in the bucket"
+      - name: low
+        data_type: DOUBLE
+        description: "Lowest traded price in the bucket"
+      - name: close
+        data_type: DOUBLE
+        description: "Last traded price in the bucket"
+      - name: volume
+        data_type: BIGINT
+        description: "Total trade volume in the bucket"
+      - name: bid_open
+        data_type: DOUBLE
+        description: "First bid price in the bucket"
+      - name: bid_high
+        data_type: DOUBLE
+        description: "Highest bid price in the bucket"
+      - name: bid_low
+        data_type: DOUBLE
+        description: "Lowest bid price in the bucket"
+      - name: bid_close
+        data_type: DOUBLE
+        description: "Last bid price in the bucket"
+      - name: ask_open
+        data_type: DOUBLE
+        description: "First ask price in the bucket"
+      - name: ask_high
+        data_type: DOUBLE
+        description: "Highest ask price in the bucket"
+      - name: ask_low
+        data_type: DOUBLE
+        description: "Lowest ask price in the bucket"
+      - name: ask_close
+        data_type: DOUBLE
+        description: "Last ask price in the bucket"
+
   - name: tick_load_manifest
     description: >
       Audit manifest tracking which source files were loaded during the most
