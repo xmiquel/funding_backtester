@@ -2,9 +2,7 @@
 
 {{ ohlcv_aggregate(
     bucket_seconds=60,
-    source_ref=ref('ohlcv_15s')
+    source_ref=ref('ohlcv_15s'),
+    lookback_seconds=120 if is_incremental() else 0,
+    this_ref=this if is_incremental() else none
 ) }}
-
-{% if is_incremental() %}
-WHERE datetime > (SELECT MAX(datetime) FROM {{ this }}) - INTERVAL '120' SECOND
-{% endif %}

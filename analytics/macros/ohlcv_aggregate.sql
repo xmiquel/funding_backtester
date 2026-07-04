@@ -1,4 +1,4 @@
-{% macro ohlcv_aggregate(bucket_seconds, source_ref, is_daily=false) %}
+{% macro ohlcv_aggregate(bucket_seconds, source_ref, is_daily=false, lookback_seconds=0, this_ref=none) %}
 
 {% if is_daily %}
 {% set bucket_expr -%}
@@ -26,6 +26,11 @@ WITH bucketed AS (
             ORDER BY datetime DESC
         ) AS rn_desc
     FROM {{ source_ref }}
+    {% if lookback_seconds > 0 and this_ref != none %}
+    WHERE datetime >= (
+        SELECT COALESCE(MAX(datetime), TIMESTAMP 'epoch') FROM {{ this_ref }}
+    ) - INTERVAL '{{ lookback_seconds }}' SECOND
+    {% endif %}
 )
 SELECT
     bucket_dt AS datetime,
