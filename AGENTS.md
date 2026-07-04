@@ -1,5 +1,10 @@
 # Code Review Rules — funding_backtester
 
+## Language
+
+- All replies, comments, feedback, and documentation must be written in **Spanish** unless the conversation explicitly requires otherwise.
+- Code identifiers, commit messages, and technical artifacts remain in English per project convention.
+
 ## Project Overview
 
 Full-stack funding backtesting platform.

@@ -18,6 +18,8 @@ import sys
 
 import duckdb
 
+from funding_backtester.config import settings
+
 
 def parse_tick_line(line: str) -> dict[str, str | float | int] | None:
     """Parse a single NT8 Tick Replay line into a dict of typed values.
@@ -137,8 +139,8 @@ def main() -> int:
     )
     parser.add_argument(
         "--duckdb-path",
-        default="data/ticks.duckdb",
-        help="Path to DuckDB database file (default: data/ticks.duckdb)",
+        default=settings.duckdb_path,
+        help="Path to DuckDB database file",
     )
     parser.add_argument(
         "--dbt-project-dir",

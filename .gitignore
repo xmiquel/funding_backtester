@@ -15,5 +15,6 @@ build/
 /analytics/.user.yml
 /.atl/*.cache.json
 .codegraph/
+.pi/
 backend/data/
 backend/.coverage
