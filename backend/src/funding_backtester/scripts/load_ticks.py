@@ -80,24 +80,23 @@ def create_raw_view(conn: duckdb.DuckDBPyConnection, data_dir: str) -> None:
     five columns: raw_timestamp, ask, bid, last, volume, and filename.
     """
     glob_pattern = str(pathlib.Path(data_dir, "*.txt").resolve())
-    conn.execute(
-        f"""
-        CREATE OR REPLACE VIEW raw_ticks AS
-        SELECT * FROM read_csv_auto(
-            '{glob_pattern}',
-            delim=';',
-            header=false,
-            columns={{
-                'raw_timestamp': 'VARCHAR',
-                'ask': 'DOUBLE',
-                'bid': 'DOUBLE',
-                'last': 'DOUBLE',
-                'volume': 'BIGINT'
-            }},
-            filename=true
-        )
-        """
+    sql = (
+        "CREATE OR REPLACE VIEW raw_ticks AS\n"
+        "SELECT * FROM read_csv_auto(\n"
+        f"    '{glob_pattern}',\n"  # nosec B608
+        "    delim=';',\n"
+        "    header=false,\n"
+        "    columns={\n"
+        "        'raw_timestamp': 'VARCHAR',\n"
+        "        'ask': 'DOUBLE',\n"
+        "        'bid': 'DOUBLE',\n"
+        "        'last': 'DOUBLE',\n"
+        "        'volume': 'BIGINT'\n"
+        "    },\n"
+        "    filename=true\n"
+        ")\n"
     )
+    conn.execute(sql)  # nosec B608 — glob_pattern is a resolved file path, not user input
 
 
 def bootstrap_duckdb(db_path: str, data_dir: str) -> duckdb.DuckDBPyConnection:
