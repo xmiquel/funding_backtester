@@ -265,10 +265,21 @@ class TestOhlcv15sModel:
             cols = conn.execute("DESCRIBE ohlcv_15s").fetchall()
             col_names = {r[0] for r in cols}
             expected = {
-                "datetime", "symbol",
-                "open", "high", "low", "close", "volume",
-                "bid_open", "bid_high", "bid_low", "bid_close",
-                "ask_open", "ask_high", "ask_low", "ask_close",
+                "datetime",
+                "symbol",
+                "open",
+                "high",
+                "low",
+                "close",
+                "volume",
+                "bid_open",
+                "bid_high",
+                "bid_low",
+                "bid_close",
+                "ask_open",
+                "ask_high",
+                "ask_low",
+                "ask_close",
             }
             missing = expected - col_names
             assert not missing, f"Missing columns in ohlcv_15s: {missing}"
@@ -292,9 +303,7 @@ class TestOhlcv15sModel:
         """Open column is non-null and positive for all rows."""
         conn = duckdb.connect(dbt_env)
         try:
-            rows = conn.execute(
-                "SELECT symbol, open FROM ohlcv_15s ORDER BY symbol"
-            ).fetchall()
+            rows = conn.execute("SELECT symbol, open FROM ohlcv_15s ORDER BY symbol").fetchall()
             assert len(rows) > 0
             for symbol, open_val in rows:
                 assert open_val is not None, f"Open is NULL for {symbol}"
@@ -306,9 +315,7 @@ class TestOhlcv15sModel:
         """Volume column has positive values."""
         conn = duckdb.connect(dbt_env)
         try:
-            result = conn.execute(
-                "SELECT COUNT(*) FROM ohlcv_15s WHERE volume <= 0"
-            ).fetchone()[0]
+            result = conn.execute("SELECT COUNT(*) FROM ohlcv_15s WHERE volume <= 0").fetchone()[0]
             assert result == 0, f"Expected 0 rows with non-positive volume, got {result}"
         finally:
             conn.close()
@@ -325,8 +332,7 @@ class TestOhlcv15sModel:
                 ORDER BY datetime
             """).fetchall()
             assert len(rows) == 1, (
-                f"Expected 1 bucket for MNQ0626 (5 ticks in same 15s window), "
-                f"got {len(rows)}"
+                f"Expected 1 bucket for MNQ0626 (5 ticks in same 15s window), got {len(rows)}"
             )
         finally:
             conn.close()

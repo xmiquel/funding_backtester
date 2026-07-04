@@ -83,9 +83,7 @@ def ohlcv_db_path(tmp_path: pathlib.Path) -> str:
 @pytest.fixture
 def ohlcv_client(ohlcv_db_path: str, monkeypatch: pytest.MonkeyPatch):
     """FastAPI client with duckdb_path overridden to a temp DB with test data."""
-    monkeypatch.setattr(
-        "funding_backtester.config.settings.duckdb_path", ohlcv_db_path
-    )
+    monkeypatch.setattr("funding_backtester.config.settings.duckdb_path", ohlcv_db_path)
     # Clear the singleton DuckDB client so the next request opens the test DB
     import funding_backtester.api.v1.ohlcv as ohlcv_mod
 

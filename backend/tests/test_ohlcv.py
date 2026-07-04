@@ -87,9 +87,7 @@ class Test15sBucketAlignment:
         bucket_dt = row[0]
 
         expected = dt(2026, 3, 15, 9, 30, 0)
-        assert bucket_dt == expected, (
-            f"Expected bucket {expected}, got {bucket_dt}"
-        )
+        assert bucket_dt == expected, f"Expected bucket {expected}, got {bucket_dt}"
 
     def test_tick_near_boundary_end(self, memory_db):
         """Tick at 2026-03-15 09:30:14.999 → bucket 2026-03-15 09:30:00."""
@@ -106,9 +104,7 @@ class Test15sBucketAlignment:
         bucket_dt = row[0]
 
         expected = dt(2026, 3, 15, 9, 30, 0)
-        assert bucket_dt == expected, (
-            f"Expected bucket {expected}, got {bucket_dt}"
-        )
+        assert bucket_dt == expected, f"Expected bucket {expected}, got {bucket_dt}"
 
     def test_tick_at_next_boundary(self, memory_db):
         """Tick at 2026-03-15 09:30:15.000 → bucket 2026-03-15 09:30:15."""
@@ -125,9 +121,7 @@ class Test15sBucketAlignment:
         bucket_dt = row[0]
 
         expected = dt(2026, 3, 15, 9, 30, 15)
-        assert bucket_dt == expected, (
-            f"Expected bucket {expected}, got {bucket_dt}"
-        )
+        assert bucket_dt == expected, f"Expected bucket {expected}, got {bucket_dt}"
 
     def test_tick_before_midnight_boundary(self, memory_db):
         """Tick at 2026-03-15 23:59:59.999 → bucket 2026-03-15 23:59:45."""
@@ -144,9 +138,7 @@ class Test15sBucketAlignment:
         bucket_dt = row[0]
 
         expected = dt(2026, 3, 15, 23, 59, 45)
-        assert bucket_dt == expected, (
-            f"Expected bucket {expected}, got {bucket_dt}"
-        )
+        assert bucket_dt == expected, f"Expected bucket {expected}, got {bucket_dt}"
 
     def test_tick_at_midnight(self, memory_db):
         """Tick at 2026-03-16 00:00:00.000 → bucket 2026-03-16 00:00:00."""
@@ -163,9 +155,7 @@ class Test15sBucketAlignment:
         bucket_dt = row[0]
 
         expected = dt(2026, 3, 16, 0, 0, 0)
-        assert bucket_dt == expected, (
-            f"Expected bucket {expected}, got {bucket_dt}"
-        )
+        assert bucket_dt == expected, f"Expected bucket {expected}, got {bucket_dt}"
 
 
 class TestOHLCVAggregation:
@@ -195,9 +185,23 @@ class TestOHLCVAggregation:
         assert len(rows) == 1, f"Expected 1 bucket row, got {len(rows)}"
 
         row = rows[0]
-        (bucket_dt, symbol, open_, high, low, close_,
-         volume, bid_open, bid_high, bid_low, bid_close,
-         ask_open, ask_high, ask_low, ask_close) = row
+        (
+            bucket_dt,
+            symbol,
+            open_,
+            high,
+            low,
+            close_,
+            volume,
+            bid_open,
+            bid_high,
+            bid_low,
+            bid_close,
+            ask_open,
+            ask_high,
+            ask_low,
+            ask_close,
+        ) = row
 
         expected_dt = dt(2026, 3, 15, 9, 30, 0)
         assert bucket_dt == expected_dt
@@ -233,8 +237,7 @@ class TestOHLCVAggregation:
         assert len(rows) == 1, f"Expected 1 bucket row, got {len(rows)}"
 
         row = rows[0]
-        (_dt, _sym, open_, high, low, close_, volume,
-         _, _, _, _, _, _, _, _) = row
+        (_dt, _sym, open_, high, low, close_, volume, _, _, _, _, _, _, _, _) = row
 
         open_f = float(open_)
         assert open_f == float(high) == float(low) == float(close_) == 4500.35, (
@@ -281,9 +284,23 @@ class TestOHLCVAggregation:
         assert len(rows) == 1
 
         row = rows[0]
-        (_, _, _, _, _, _, _,
-         bid_open, bid_high, bid_low, bid_close,
-         ask_open, ask_high, ask_low, ask_close) = row
+        (
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            bid_open,
+            bid_high,
+            bid_low,
+            bid_close,
+            ask_open,
+            ask_high,
+            ask_low,
+            ask_close,
+        ) = row
 
         # First tick bid=4500.20, last tick bid=4500.25; middle is NULL
         self._assert_float(bid_open, 4500.20, "bid_open (first non-null)")
@@ -537,9 +554,7 @@ class TestOHLCVApiEndpoint:
         assert len(data) > 1, "Need at least 2 bars to test ordering"
 
         timestamps = [dt.fromisoformat(bar["datetime"]) for bar in data]
-        assert timestamps == sorted(timestamps), (
-            "Results must be sorted by datetime ascending"
-        )
+        assert timestamps == sorted(timestamps), "Results must be sorted by datetime ascending"
 
     @pytest.mark.asyncio
     async def test_date_filtered_limits_results(self, ohlcv_client):
