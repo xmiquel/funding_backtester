@@ -15,3 +15,5 @@ build/
 /analytics/.user.yml
 /.atl/*.cache.json
 .codegraph/
+backend/data/
+backend/.coverage
