@@ -113,6 +113,173 @@ models:
         data_type: DOUBLE
         description: "Last ask price in the bucket"
 
+  - name: ohlcv_1m
+    description: >
+      1-minute OHLCV bars aggregated from ohlcv_15s. Incremental
+      materialization. 4× aggregation factor from 15-second source.
+    columns:
+      - name: datetime
+        data_type: TIMESTAMP
+        description: "1-minute bucket boundary"
+        tests:
+          - not_null
+      - name: symbol
+        data_type: VARCHAR
+        description: "Futures contract symbol"
+        tests:
+          - not_null
+      - name: open
+        data_type: DOUBLE
+        description: "First traded price in the bucket"
+      - name: high
+        data_type: DOUBLE
+        description: "Highest traded price in the bucket"
+      - name: low
+        data_type: DOUBLE
+        description: "Lowest traded price in the bucket"
+      - name: close
+        data_type: DOUBLE
+        description: "Last traded price in the bucket"
+      - name: volume
+        data_type: BIGINT
+        description: "Total trade volume in the bucket"
+      - name: bid_open
+        data_type: DOUBLE
+        description: "First bid price in the bucket"
+      - name: bid_high
+        data_type: DOUBLE
+        description: "Highest bid price in the bucket"
+      - name: bid_low
+        data_type: DOUBLE
+        description: "Lowest bid price in the bucket"
+      - name: bid_close
+        data_type: DOUBLE
+        description: "Last bid price in the bucket"
+      - name: ask_open
+        data_type: DOUBLE
+        description: "First ask price in the bucket"
+      - name: ask_high
+        data_type: DOUBLE
+        description: "Highest ask price in the bucket"
+      - name: ask_low
+        data_type: DOUBLE
+        description: "Lowest ask price in the bucket"
+      - name: ask_close
+        data_type: DOUBLE
+        description: "Last ask price in the bucket"
+
+  - name: ohlcv_3m
+    description: >
+      3-minute OHLCV bars aggregated from ohlcv_15s. Incremental
+      materialization. 12× aggregation factor from 15-second source.
+    columns:
+      - name: datetime
+        data_type: TIMESTAMP
+        description: "3-minute bucket boundary"
+        tests:
+          - not_null
+      - name: symbol
+        data_type: VARCHAR
+        description: "Futures contract symbol"
+        tests:
+          - not_null
+
+  - name: ohlcv_5m
+    description: >
+      5-minute OHLCV bars aggregated from ohlcv_15s. Incremental
+      materialization. 20× aggregation factor from 15-second source.
+    columns:
+      - name: datetime
+        data_type: TIMESTAMP
+        description: "5-minute bucket boundary"
+        tests:
+          - not_null
+      - name: symbol
+        data_type: VARCHAR
+        description: "Futures contract symbol"
+        tests:
+          - not_null
+
+  - name: ohlcv_15m
+    description: >
+      15-minute OHLCV bars aggregated from ohlcv_15s. Incremental
+      materialization. 60× aggregation factor from 15-second source.
+    columns:
+      - name: datetime
+        data_type: TIMESTAMP
+        description: "15-minute bucket boundary"
+        tests:
+          - not_null
+      - name: symbol
+        data_type: VARCHAR
+        description: "Futures contract symbol"
+        tests:
+          - not_null
+
+  - name: ohlcv_1h
+    description: >
+      1-hour OHLCV bars aggregated from ohlcv_15s. Incremental
+      materialization. 240× aggregation factor from 15-second source.
+    columns:
+      - name: datetime
+        data_type: TIMESTAMP
+        description: "1-hour bucket boundary"
+        tests:
+          - not_null
+      - name: symbol
+        data_type: VARCHAR
+        description: "Futures contract symbol"
+        tests:
+          - not_null
+
+  - name: ohlcv_3h
+    description: >
+      3-hour OHLCV bars aggregated from ohlcv_15s. Incremental
+      materialization. 720× aggregation factor from 15-second source.
+    columns:
+      - name: datetime
+        data_type: TIMESTAMP
+        description: "3-hour bucket boundary"
+        tests:
+          - not_null
+      - name: symbol
+        data_type: VARCHAR
+        description: "Futures contract symbol"
+        tests:
+          - not_null
+
+  - name: ohlcv_4h
+    description: >
+      4-hour OHLCV bars aggregated from ohlcv_15s. Incremental
+      materialization. 960× aggregation factor from 15-second source.
+    columns:
+      - name: datetime
+        data_type: TIMESTAMP
+        description: "4-hour bucket boundary"
+        tests:
+          - not_null
+      - name: symbol
+        data_type: VARCHAR
+        description: "Futures contract symbol"
+        tests:
+          - not_null
+
+  - name: ohlcv_1d
+    description: >
+      Daily OHLCV bars aggregated from ohlcv_15s using date_trunc('day', event_ts).
+      Incremental materialization. 5760× aggregation factor from 15-second source.
+    columns:
+      - name: datetime
+        data_type: TIMESTAMP
+        description: "Daily bucket boundary (midnight)"
+        tests:
+          - not_null
+      - name: symbol
+        data_type: VARCHAR
+        description: "Futures contract symbol"
+        tests:
+          - not_null
+
   - name: tick_load_manifest
     description: >
       Audit manifest tracking which source files were loaded during the most

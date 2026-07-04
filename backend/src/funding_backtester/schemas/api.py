@@ -17,6 +17,21 @@ class RootResponse(BaseModel):
     message: str
 
 
+class ValidationErrorDetail(BaseModel):
+    """A single validation error item matching FastAPI/Pydantic convention."""
+
+    type: str
+    loc: tuple[str | int, ...]
+    msg: str
+    input: str | None = None
+
+
+class ValidationErrorResponse(BaseModel):
+    """Consistent validation error response wrapper."""
+
+    detail: list[ValidationErrorDetail]
+
+
 class OHLCVBar(BaseModel):
     """15-second OHLCV bar with bid/ask mirrors."""
 

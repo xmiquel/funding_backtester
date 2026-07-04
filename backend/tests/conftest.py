@@ -76,6 +76,72 @@ def ohlcv_db_path(tmp_path: pathlib.Path) -> str:
             ('2026-03-15 09:30:15', 'ESU0626', 5001.00, 5002.00, 5000.50, 5001.75, 120,
              5000.90, 5001.90, 5000.40, 5001.65, 5001.10, 5002.10, 5000.60, 5001.85)
     """)
+
+    # Create multi-timeframe tables for granularity API tests
+    # 1m: aggregate 3 x 15s bars into 1 bar for MNQ0626
+    conn.execute("""
+        CREATE TABLE ohlcv_1m (
+            datetime TIMESTAMP, symbol VARCHAR, open DOUBLE, high DOUBLE,
+            low DOUBLE, close DOUBLE, volume BIGINT, bid_open DOUBLE,
+            bid_high DOUBLE, bid_low DOUBLE, bid_close DOUBLE, ask_open DOUBLE,
+            ask_high DOUBLE, ask_low DOUBLE, ask_close DOUBLE
+        )
+    """)
+    conn.execute("""
+        INSERT INTO ohlcv_1m VALUES
+            ('2026-03-15 09:30:00', 'MNQ0626', 4500.25, 4501.25, 4500.00, 4501.00, 450,
+             4500.20, 4501.20, 4499.95, 4500.95, 4500.30, 4501.30, 4500.05, 4501.05),
+            ('2026-03-15 09:30:00', 'ESU0626', 5000.00, 5002.00, 4999.50, 5001.75, 200,
+             4999.90, 5001.90, 4999.40, 5001.65, 5000.10, 5002.10, 4999.60, 5001.85)
+    """)
+
+    # 1d: single daily bar
+    conn.execute("""
+        CREATE TABLE ohlcv_1d (
+            datetime TIMESTAMP, symbol VARCHAR, open DOUBLE, high DOUBLE,
+            low DOUBLE, close DOUBLE, volume BIGINT, bid_open DOUBLE,
+            bid_high DOUBLE, bid_low DOUBLE, bid_close DOUBLE, ask_open DOUBLE,
+            ask_high DOUBLE, ask_low DOUBLE, ask_close DOUBLE
+        )
+    """)
+    conn.execute("""
+        INSERT INTO ohlcv_1d VALUES
+            ('2026-03-15 00:00:00', 'MNQ0626', 4500.25, 4501.25, 4500.00, 4501.00, 450,
+             4500.20, 4501.20, 4499.95, 4500.95, 4500.30, 4501.30, 4500.05, 4501.05),
+            ('2026-03-15 00:00:00', 'ESU0626', 5000.00, 5002.00, 4999.50, 5001.75, 200,
+             4999.90, 5001.90, 4999.40, 5001.65, 5000.10, 5002.10, 4999.60, 5001.85)
+    """)
+
+    # 1h: single hourly bar (9:30-10:30)
+    conn.execute("""
+        CREATE TABLE ohlcv_1h (
+            datetime TIMESTAMP, symbol VARCHAR, open DOUBLE, high DOUBLE,
+            low DOUBLE, close DOUBLE, volume BIGINT, bid_open DOUBLE,
+            bid_high DOUBLE, bid_low DOUBLE, bid_close DOUBLE, ask_open DOUBLE,
+            ask_high DOUBLE, ask_low DOUBLE, ask_close DOUBLE
+        )
+    """)
+    conn.execute("""
+        INSERT INTO ohlcv_1h VALUES
+            ('2026-03-15 09:00:00', 'MNQ0626', 4500.25, 4501.25, 4500.00, 4501.00, 450,
+             4500.20, 4501.20, 4499.95, 4500.95, 4500.30, 4501.30, 4500.05, 4501.05)
+    """)
+
+    # 5m: single 5m bar
+    conn.execute("""
+        CREATE TABLE ohlcv_5m (
+            datetime TIMESTAMP, symbol VARCHAR, open DOUBLE, high DOUBLE,
+            low DOUBLE, close DOUBLE, volume BIGINT, bid_open DOUBLE,
+            bid_high DOUBLE, bid_low DOUBLE, bid_close DOUBLE, ask_open DOUBLE,
+            ask_high DOUBLE, ask_low DOUBLE, ask_close DOUBLE
+        )
+    """)
+    conn.execute("""
+        INSERT INTO ohlcv_5m VALUES
+            ('2026-03-15 09:30:00', 'MNQ0626', 4500.25, 4501.25, 4500.00, 4501.00, 450,
+             4500.20, 4501.20, 4499.95, 4500.95, 4500.30, 4501.30, 4500.05, 4501.05)
+    """)
+
     conn.close()
     return db_path
 

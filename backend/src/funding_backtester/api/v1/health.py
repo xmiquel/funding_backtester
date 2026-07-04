@@ -4,7 +4,7 @@ from fastapi import APIRouter
 
 from funding_backtester.schemas.api import HealthResponse
 
-router = APIRouter()
+router = APIRouter(prefix="/api/v1")
 
 
 @router.get("/health", response_model=HealthResponse)
