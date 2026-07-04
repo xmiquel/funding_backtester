@@ -18,7 +18,7 @@ All acceptance criteria met. No blockers, no warnings.
 
 | AC | Description | Result | Evidence |
 |----|-------------|--------|----------|
-| AC1.1 | `settings.duckdb_path` resolves to `<repo_root>/data/ticks.duckdb` | **PASS** | `D:\repos\funding_backtester\data\ticks.duckdb` — confirmed via `config.py` code and runtime execution |
+| AC1.1 | `settings.duckdb_path` resolves to `<repo_root>/data/ticks.duckdb` | **PASS** | `<repo_root>/data/ticks.duckdb` — confirmed via `config.py` code and runtime execution |
 | AC1.2 | `analytics/profiles.yml` DuckDB path resolves to same canonical file | **PASS** | Path is `../data/ticks.duckdb` (relative to `analytics/`), resolves to repo root `data/ticks.duckdb` |
 | AC1.3 | `profiles.yml` does NOT use a relative path that changes meaning based on working directory | **PASS** | Uses `../data/ticks.duckdb` which is relative to the profiles.yml location itself, not CWD |
 | AC1.4 | Scripts in `scripts/` use canonical path | **PASS** | `load_ticks.py` default is `settings.duckdb_path` |

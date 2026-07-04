@@ -21,7 +21,7 @@
 | RED | Wrote `tests/test_paths.py` with 7 tests | `ModuleNotFoundError` for `funding_backtester._paths` |
 | GREEN | Created `_paths.py` with `_find_repo_root()` + `duckdb_path()` | 7/7 passed |
 | REFACTOR | Changed marker from `pyproject.toml` to `.git` + `backend/pyproject.toml` (actual root has no pyproject.toml) | 7/7 passed |
-| VERIFY | Updated `config.py` → verified path resolves | `D:\repos\funding_backtester\data\ticks.duckdb` |
+| VERIFY | Updated `config.py` → verified path resolves | `<repo_root>/data/ticks.duckdb` |
 | VERIFY | Updated `profiles.yml` | dbt uses `../data/ticks.duckdb` |
 | VERIFY | Updated `load_ticks.py` | Uses `settings.duckdb_path` as default |
 | VERIFY | `dbt run --full-refresh` | 12 models, all PASS (116s) |
@@ -48,7 +48,7 @@
 
 ## Verification Evidence
 
-- Config path: `D:\repos\funding_backtester\data\ticks.duckdb` ✅
+- Config path: `<repo_root>/data/ticks.duckdb` ✅
 - dbt run: 12/12 models PASS ✅
 - dbt test: 37/37 tests PASS ✅
 - Backend tests: 84/84 PASS ✅
