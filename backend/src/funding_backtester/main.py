@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from funding_backtester.api.v1 import health, ohlcv
+from funding_backtester.api.v1 import features, health, ohlcv
 from funding_backtester.schemas.api import RootResponse
 
 
@@ -24,6 +24,7 @@ app = FastAPI(
 )
 
 app.include_router(health.router, tags=["health"])
+app.include_router(features.router, tags=["features"])
 app.include_router(ohlcv.router, tags=["ohlcv"])
 
 
