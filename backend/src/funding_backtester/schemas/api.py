@@ -1,6 +1,6 @@
 """API response schemas."""
 
-from datetime import datetime
+import datetime as dt
 
 from pydantic import BaseModel, ConfigDict
 
@@ -32,10 +32,16 @@ class ValidationErrorResponse(BaseModel):
     detail: list[ValidationErrorDetail]
 
 
+class ErrorResponse(BaseModel):
+    """Generic error response wrapper for internal API failures."""
+
+    detail: str
+
+
 class OHLCVBar(BaseModel):
     """15-second OHLCV bar with bid/ask mirrors."""
 
-    datetime: datetime
+    datetime: dt.datetime
     symbol: str
     open: float
     high: float
@@ -50,5 +56,46 @@ class OHLCVBar(BaseModel):
     ask_high: float
     ask_low: float
     ask_close: float
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class FeatureCatalogEntry(BaseModel):
+    """Catalog entry for a bounded indicator feature."""
+
+    name: str
+    library: str
+    parameters: dict[str, object]
+    outputs: list[str]
+    min_lookback: int
+
+
+class FeatureMetaResponse(BaseModel):
+    """Available feature metadata from persisted tables."""
+
+    symbols: list[str]
+    timeframes: list[str]
+    source_models: list[str]
+
+
+class FeatureRow(BaseModel):
+    """Persisted feature row returned by the features API."""
+
+    datetime: dt.datetime
+    symbol: str
+    timeframe: str
+    source_model: str
+    feature_name: str
+    feature_id: str
+    parameter_hash: str
+    parameter_json: str
+    output_name: str
+    value: float | None
+    computed_at: dt.datetime
+    computation_version: str
+    pandas_ta_classic_version: str
+    talib_available: bool
+    talib_version: str | None
+    talib_used: bool
 
     model_config = ConfigDict(from_attributes=True)
