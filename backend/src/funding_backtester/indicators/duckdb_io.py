@@ -1,4 +1,16 @@
-"""Borde de persistencia en DuckDB para features de indicadores."""
+"""Borde de persistencia en DuckDB para features de indicadores.
+
+Este módulo actúa como boundary/repository explícito para el storage analítico
+de features en DuckDB. No usa la base transaccional del backend
+(`SQLAlchemy`/`asyncpg`) ni participa del request path de FastAPI: su ejecución
+es síncrona por diseño porque se consume desde CLI, jobs offline y la capa de
+persistencia/poblado de features.
+
+El SQL raw queda encapsulado aquí porque el acceso es controlado y acotado a
+DuckDB. Los identificadores de tabla/modelo se validan antes de interpolarse y
+los valores externos se pasan por parámetros, manteniendo el límite de
+seguridad en este boundary.
+"""
 
 from __future__ import annotations
 
@@ -47,8 +59,12 @@ def build_indicator_feature_stage(
     timeframe: str,
     feature_names: Iterable[str],
 ) -> int:
-    """Calcula los indicadores del catálogo desde un modelo OHLCV de DuckDB hacia la tabla de
-    stage."""
+    """Calcula features de indicadores desde DuckDB hacia la tabla de stage.
+
+    Esta función pertenece al boundary de persistencia analítica de DuckDB, no
+    a la capa transaccional del backend. La ejecución es síncrona porque se usa
+    en flujos offline/CLI y no en handlers HTTP.
+    """
     _validate_source_model(source_model)
     requests = [validate_indicator_request(feature_name) for feature_name in feature_names]
     conn = duckdb.connect(str(database_path))
@@ -219,10 +235,14 @@ def _replace_stage_rows(
         if rows:
             placeholders = ", ".join("?" for _ in STAGE_COLUMNS)
             columns = ", ".join(STAGE_COLUMNS)
+            insert_sql = (
+                f"INSERT INTO indicator_feature_stage ({columns}) "  # nosec B608
+                f"VALUES ({placeholders})"
+            )
             conn.executemany(
-                f"INSERT INTO indicator_feature_stage ({columns}) VALUES ({placeholders})",
+                insert_sql,
                 rows,
-            )  # nosec B608 — STAGE_COLUMNS es una constante interna de tupla
+            )
         conn.execute("COMMIT")
     except Exception:
         conn.execute("ROLLBACK")

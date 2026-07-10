@@ -1,7 +1,13 @@
-"""Loader compatible con vectorbt para features de indicadores persistidas.
+"""Boundary de carga de features de DuckDB para backtesting con vectorbt.
 
-Carga precios de cierre y features de indicadores desde DuckDB en tuplas
-``pd.Series`` / ``pd.DataFrame`` alineadas por datetime y listas para vectorbt.
+Este módulo no accede a la base transaccional SQLAlchemy/asyncpg del backend.
+Lee desde DuckDB como storage analítico de features y mantiene el SQL raw
+encapsulado en esta capa repository/boundary. La ejecución es síncrona por
+intención porque se consume desde CLI, notebooks, jobs offline y el flujo de
+vectorbt, no desde el request path de FastAPI.
+
+Los identificadores interpolados se validan antes de usarse y los valores de
+entrada viajan como parámetros.
 """
 
 from __future__ import annotations
@@ -34,6 +40,14 @@ def load_features(
     feature_table: str = "indicator_feature_stage",
 ) -> tuple[pd.Series, pd.DataFrame]:
     """Carga precios de cierre y features de indicadores alineadas para vectorbt.
+
+    Forma parte del boundary/repository de DuckDB para features analíticas. No
+    utiliza la DB transaccional del backend ni la infraestructura async de
+    FastAPI; la lectura síncrona es aceptada aquí porque el consumidor es
+    offline/CLI/vectorbt.
+
+    El SQL raw está encapsulado en este módulo porque los identificadores de
+    tabla/modelo se validan explícitamente y los filtros se envían parametrizados.
 
     Args:
         database_path: Ruta al archivo de base de datos DuckDB.
@@ -97,9 +111,12 @@ def _load_close(
     symbol: str,
 ) -> pd.Series:
     """Carga los precios de cierre desde el modelo OHLCV de origen."""
-    query = f"SELECT datetime, close FROM {source_model} WHERE symbol = ? ORDER BY datetime"
+    query = (
+        f"SELECT datetime, close FROM {source_model} "  # nosec B608
+        "WHERE symbol = ? ORDER BY datetime"
+    )
     df = conn.execute(
-        query,  # nosec B608 — source_model validado por _validate_identifier
+        query,
         [symbol],
     ).df()
     if df.empty:
