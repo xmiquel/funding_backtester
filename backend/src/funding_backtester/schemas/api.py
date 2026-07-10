@@ -1,6 +1,6 @@
 """API response schemas."""
 
-from datetime import datetime
+import datetime as dt
 
 from pydantic import BaseModel, ConfigDict
 
@@ -35,7 +35,7 @@ class ValidationErrorResponse(BaseModel):
 class OHLCVBar(BaseModel):
     """15-second OHLCV bar with bid/ask mirrors."""
 
-    datetime: datetime
+    datetime: dt.datetime
     symbol: str
     open: float
     high: float
@@ -75,7 +75,7 @@ class FeatureMetaResponse(BaseModel):
 class FeatureRow(BaseModel):
     """Persisted feature row returned by the features API."""
 
-    datetime: datetime
+    datetime: dt.datetime
     symbol: str
     timeframe: str
     source_model: str
@@ -85,7 +85,7 @@ class FeatureRow(BaseModel):
     parameter_json: str
     output_name: str
     value: float | None
-    computed_at: datetime
+    computed_at: dt.datetime
     computation_version: str
     pandas_ta_classic_version: str
     talib_available: bool

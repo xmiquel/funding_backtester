@@ -7,6 +7,7 @@ requiring consumers to import indicator internals.
 from __future__ import annotations
 
 import asyncio
+import datetime as dt
 import logging
 import os
 from collections.abc import AsyncGenerator
@@ -114,25 +115,95 @@ def _build_feature_query(
     return sql, [symbol]
 
 
+def _require_datetime(value: object, field_name: str) -> dt.datetime:
+    """Validate that a value is a datetime instance."""
+    if isinstance(value, dt.datetime):
+        return value
+    raise TypeError(f"Expected {field_name} to be datetime, got {type(value).__name__}")
+
+
+def _require_str(value: object, field_name: str) -> str:
+    """Validate that a value is a string."""
+    if isinstance(value, str):
+        return value
+    raise TypeError(f"Expected {field_name} to be str, got {type(value).__name__}")
+
+
+def _require_optional_str(value: object, field_name: str) -> str | None:
+    """Validate that a value is an optional string."""
+    if value is None:
+        return None
+    return _require_str(value, field_name)
+
+
+def _require_optional_float(value: object, field_name: str) -> float | None:
+    """Validate that a value is an optional float."""
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        raise TypeError(f"Expected {field_name} to be float, got bool")
+    if isinstance(value, (int, float, str)):
+        try:
+            return float(value)
+        except ValueError as exc:
+            raise TypeError(
+                f"Expected {field_name} to be float, got {type(value).__name__}"
+            ) from exc
+    raise TypeError(f"Expected {field_name} to be float, got {type(value).__name__}")
+
+
+def _require_bool(value: object, field_name: str) -> bool:
+    """Validate that a value is a boolean."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int) and value in (0, 1):
+        return bool(value)
+    raise TypeError(f"Expected {field_name} to be bool, got {type(value).__name__}")
+
+
 def _row_to_feature(row: tuple[object, ...]) -> FeatureRow:
     """Convert a DuckDB result row to a FeatureRow."""
+    if len(row) != 16:
+        raise ValueError(f"Expected 16 columns for FeatureRow, got {len(row)}")
+
+    (
+        datetime_value,
+        symbol,
+        timeframe,
+        source_model,
+        feature_name,
+        feature_id,
+        parameter_hash,
+        parameter_json,
+        output_name,
+        value,
+        computed_at,
+        computation_version,
+        pandas_ta_classic_version,
+        talib_available,
+        talib_version,
+        talib_used,
+    ) = row
+
     return FeatureRow(
-        datetime=row[0],
-        symbol=row[1],
-        timeframe=row[2],
-        source_model=row[3],
-        feature_name=row[4],
-        feature_id=row[5],
-        parameter_hash=row[6],
-        parameter_json=row[7],
-        output_name=row[8],
-        value=row[9],
-        computed_at=row[10],
-        computation_version=row[11],
-        pandas_ta_classic_version=str(row[12]),
-        talib_available=bool(row[13]),
-        talib_version=str(row[14]) if row[14] else None,
-        talib_used=bool(row[15]),
+        datetime=_require_datetime(datetime_value, 'datetime'),
+        symbol=_require_str(symbol, 'symbol'),
+        timeframe=_require_str(timeframe, 'timeframe'),
+        source_model=_require_str(source_model, 'source_model'),
+        feature_name=_require_str(feature_name, 'feature_name'),
+        feature_id=_require_str(feature_id, 'feature_id'),
+        parameter_hash=_require_str(parameter_hash, 'parameter_hash'),
+        parameter_json=_require_str(parameter_json, 'parameter_json'),
+        output_name=_require_str(output_name, 'output_name'),
+        value=_require_optional_float(value, 'value'),
+        computed_at=_require_datetime(computed_at, 'computed_at'),
+        computation_version=_require_str(computation_version, 'computation_version'),
+        pandas_ta_classic_version=_require_str(
+            pandas_ta_classic_version, 'pandas_ta_classic_version'
+        ),
+        talib_available=_require_bool(talib_available, 'talib_available'),
+        talib_version=_require_optional_str(talib_version, 'talib_version') or None,
+        talib_used=_require_bool(talib_used, 'talib_used'),
     )
 
 

@@ -239,6 +239,7 @@ class TestFeatureQueryEndpoint:
         assert expected_keys.issubset(row.keys()), (
             f"Missing keys: {expected_keys - set(row.keys())}"
         )
+        assert row["talib_version"] == "0.6.8"
 
     @pytest.mark.asyncio
     async def test_feature_filter_by_name(self, feature_client_with_stage):
@@ -297,7 +298,7 @@ def _create_client(monkeypatch, db_path):
     return AsyncClient(transport=transport, base_url="http://test")
 
 
-def _populate_stage_table(conn):
+def _populate_stage_table(conn, talib_version: str | None = '0.6.8'):
     """Insert sample feature data into indicator_feature_stage."""
     conn.execute("""
         CREATE TABLE indicator_feature_stage (
@@ -325,23 +326,42 @@ def _populate_stage_table(conn):
         """
         INSERT INTO indicator_feature_stage VALUES
         ('2026-03-15 09:30:00', 'ES', '15s', 'ohlcv_15s',
-         'rsi', 'fid-rsi', 'hash-rsi', ?,
-         'rsi', 45.5,
-         '2026-03-15 09:30:15', 'indicator-layer-v1',
-         '1.0.6', true, '0.6.8', false),
+          'rsi', 'fid-rsi', 'hash-rsi', ?,
+          'rsi', 45.5,
+          '2026-03-15 09:30:15', 'indicator-layer-v1',
+          '1.0.6', true, ?, false),
         ('2026-03-15 09:30:15', 'ES', '15s', 'ohlcv_15s',
-         'rsi', 'fid-rsi', 'hash-rsi', ?,
-         'rsi', 46.0,
-         '2026-03-15 09:30:15', 'indicator-layer-v1',
-         '1.0.6', true, '0.6.8', false),
+          'rsi', 'fid-rsi', 'hash-rsi', ?,
+          'rsi', 46.0,
+          '2026-03-15 09:30:15', 'indicator-layer-v1',
+          '1.0.6', true, ?, false),
         ('2026-03-15 09:30:00', 'ES', '15s', 'ohlcv_15s',
-         'sma', 'fid-sma', 'hash-sma', ?,
-         'sma', 4510.25,
-         '2026-03-15 09:30:15', 'indicator-layer-v1',
-         '1.0.6', true, '0.6.8', false)
+          'sma', 'fid-sma', 'hash-sma', ?,
+          'sma', 4510.25,
+          '2026-03-15 09:30:15', 'indicator-layer-v1',
+          '1.0.6', true, ?, false)
         """,
-        [sample_json, sample_json, sma_json],
+        [sample_json, talib_version, sample_json, talib_version, sma_json, talib_version],
     )
+
+
+@pytest.mark.asyncio
+async def test_feature_row_serializes_empty_talib_version_as_null(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+):
+    """Empty talib_version values are returned as JSON null."""
+    db_path = str(tmp_path / 'empty_talib_version.duckdb')
+    conn = duckdb.connect(db_path)
+    _populate_stage_table(conn, talib_version='')
+    conn.close()
+
+    feature_client = _create_client(monkeypatch, db_path)
+    response = await feature_client.get('/api/v1/features?symbol=ES')
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) > 0
+    assert data[0]['talib_version'] is None
 
 
 @pytest.fixture
