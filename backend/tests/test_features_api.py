@@ -141,9 +141,7 @@ class TestFeatureMetaEndpoint:
         assert data["source_models"] == []
 
     @pytest.mark.asyncio
-    async def test_meta_returns_data_when_features_exist(
-        self, feature_client_with_stage
-    ):
+    async def test_meta_returns_data_when_features_exist(self, feature_client_with_stage):
         """After building features, meta returns non-empty lists."""
         response = await feature_client_with_stage.get("/api/v1/features/meta")
         assert response.status_code == 200
@@ -221,10 +219,22 @@ class TestFeatureQueryEndpoint:
         assert len(data) > 0
         row = data[0]
         expected_keys = {
-            "datetime", "symbol", "timeframe", "source_model",
-            "feature_name", "feature_id", "parameter_hash", "parameter_json",
-            "output_name", "value", "computed_at", "computation_version",
-            "pandas_ta_classic_version", "talib_available", "talib_version", "talib_used",
+            "datetime",
+            "symbol",
+            "timeframe",
+            "source_model",
+            "feature_name",
+            "feature_id",
+            "parameter_hash",
+            "parameter_json",
+            "output_name",
+            "value",
+            "computed_at",
+            "computation_version",
+            "pandas_ta_classic_version",
+            "talib_available",
+            "talib_version",
+            "talib_used",
         }
         assert expected_keys.issubset(row.keys()), (
             f"Missing keys: {expected_keys - set(row.keys())}"
@@ -245,9 +255,7 @@ class TestFeatureQueryEndpoint:
     @pytest.mark.asyncio
     async def test_feature_filter_by_timeframe(self, feature_client_with_stage):
         """timeframe parameter filters results."""
-        response = await feature_client_with_stage.get(
-            "/api/v1/features?symbol=ES&timeframe=15s"
-        )
+        response = await feature_client_with_stage.get("/api/v1/features?symbol=ES&timeframe=15s")
         assert response.status_code == 200
         data = response.json()
         assert len(data) > 0
