@@ -1,4 +1,4 @@
-"""DuckDB persistence boundary for indicator features."""
+"""Borde de persistencia en DuckDB para features de indicadores."""
 
 from __future__ import annotations
 
@@ -47,19 +47,27 @@ def build_indicator_feature_stage(
     timeframe: str,
     feature_names: Iterable[str],
 ) -> int:
-    """Compute cataloged indicators from a DuckDB OHLCV model into the stage table."""
+    """Calcula los indicadores del catálogo desde un modelo OHLCV de DuckDB hacia la tabla de
+    stage."""
     _validate_source_model(source_model)
     requests = [validate_indicator_request(feature_name) for feature_name in feature_names]
     conn = duckdb.connect(str(database_path))
     try:
-        _ensure_stage_table(conn)
         frame = conn.execute(
             f"""
             SELECT datetime, symbol, open, high, low, close, volume
             FROM {source_model}
             ORDER BY symbol, datetime
-            """  # nosec B608 — source_model validated by _validate_source_model regex
+            """  # nosec B608 — source_model validado por la expresión regular de _validate_source_model
         ).df()
+        if frame.empty:
+            msg = (
+                f"No rows found in source_model {source_model!r}; refusing to replace "
+                "indicator_feature_stage"
+            )
+            raise RuntimeError(msg)
+
+        _ensure_stage_table(conn)
         computed_at = _stable_computed_at(frame)
         rows: list[tuple[object, ...]] = []
         for symbol, symbol_frame in frame.groupby("symbol", sort=True):
@@ -205,7 +213,7 @@ def _replace_stage_rows(
                 WHERE source_model = ?
                   AND timeframe = ?
                   AND feature_name IN ({feature_placeholders})
-                """,  # nosec B608 — STAGE_COLUMNS is an internal tuple constant
+                """,  # nosec B608 — STAGE_COLUMNS es una constante interna de tupla
                 [source_model, timeframe, *feature_names],
             )
         if rows:
@@ -214,7 +222,7 @@ def _replace_stage_rows(
             conn.executemany(
                 f"INSERT INTO indicator_feature_stage ({columns}) VALUES ({placeholders})",
                 rows,
-            )  # nosec B608 — STAGE_COLUMNS is an internal tuple constant
+            )  # nosec B608 — STAGE_COLUMNS es una constante interna de tupla
         conn.execute("COMMIT")
     except Exception:
         conn.execute("ROLLBACK")

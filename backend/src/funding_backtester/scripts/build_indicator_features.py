@@ -56,6 +56,7 @@ def build(
 
     Lanza:
         ValueError: Si el identificador de source_model no es válido.
+        RuntimeError: Si el source_model no tiene filas y no se permite vaciar el stage.
         subprocess.CalledProcessError: Si falla la construcción de dbt.
     """
     resolved_database_path = pathlib.Path(database_path).resolve()
@@ -136,8 +137,7 @@ def main(argv: list[str] | None = None) -> int:
         "--dbt-project-dir",
         default=None,
         help=(
-            "Ruta al directorio del proyecto dbt (valor predeterminado: "
-            "analytics/ del repositorio)"
+            "Ruta al directorio del proyecto dbt (valor predeterminado: analytics/ del repositorio)"
         ),
     )
     parser.add_argument(
@@ -162,7 +162,7 @@ def main(argv: list[str] | None = None) -> int:
             dbt_project_dir=args.dbt_project_dir,
             skip_dbt=args.skip_dbt,
         )
-    except (ValueError, subprocess.CalledProcessError) as exc:
+    except (ValueError, RuntimeError, subprocess.CalledProcessError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
     except OSError as exc:

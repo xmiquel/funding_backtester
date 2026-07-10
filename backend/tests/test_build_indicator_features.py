@@ -87,9 +87,7 @@ class TestBuildFunction:
         assert count == 2
         conn = duckdb.connect(str(db_path))
         try:
-            stage_rows = conn.execute(
-                "SELECT COUNT(*) FROM indicator_feature_stage"
-            ).fetchone()[0]
+            stage_rows = conn.execute("SELECT COUNT(*) FROM indicator_feature_stage").fetchone()[0]
         finally:
             conn.close()
         assert stage_rows == 2
@@ -136,9 +134,12 @@ class TestBuildFunction:
         relative_db_path = pathlib.Path("relative_build.duckdb")
         expected_db_path = (tmp_path / relative_db_path).resolve()
 
-        with mock.patch(
-            "funding_backtester.scripts.build_indicator_features.build_indicator_feature_stage"
-        ) as mock_stage, mock.patch("subprocess.run") as mock_run:
+        with (
+            mock.patch(
+                "funding_backtester.scripts.build_indicator_features.build_indicator_feature_stage"
+            ) as mock_stage,
+            mock.patch("subprocess.run") as mock_run,
+        ):
             mock_stage.return_value = 2
             mock_run.return_value.returncode = 0
             count = build(
@@ -212,12 +213,55 @@ class TestBuildFunction:
         assert count == 4
         conn = duckdb.connect(str(db_path))
         try:
-            stage_rows = conn.execute(
-                "SELECT COUNT(*) FROM indicator_feature_stage"
-            ).fetchone()[0]
+            stage_rows = conn.execute("SELECT COUNT(*) FROM indicator_feature_stage").fetchone()[0]
         finally:
             conn.close()
         assert stage_rows == 4
+
+    def test_build_rejects_empty_source_without_replacing_existing_stage_rows(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """build() fails hard on an empty source_model and keeps prior stage rows."""
+        db_path = pathlib.Path(_build_dbt_database(tmp_path / "empty_source_test.duckdb"))
+
+        with mock.patch("subprocess.run") as mock_run:
+            mock_run.return_value.returncode = 0
+            build(
+                database_path=db_path,
+                source_model="ohlcv_15s",
+                timeframe="15s",
+                feature_names=("sma",),
+                dbt_project_dir=DBT_PROJECT,
+            )
+
+        conn = duckdb.connect(str(db_path))
+        try:
+            conn.execute("DELETE FROM ohlcv_15s")
+            before_rows = conn.execute("SELECT COUNT(*) FROM indicator_feature_stage").fetchone()[0]
+        finally:
+            conn.close()
+
+        with (
+            mock.patch("subprocess.run") as mock_run,
+            pytest.raises(RuntimeError, match="No rows found in source_model"),
+        ):
+            build(
+                database_path=db_path,
+                source_model="ohlcv_15s",
+                timeframe="15s",
+                feature_names=("sma",),
+                dbt_project_dir=DBT_PROJECT,
+            )
+
+        conn = duckdb.connect(str(db_path))
+        try:
+            after_rows = conn.execute("SELECT COUNT(*) FROM indicator_feature_stage").fetchone()[0]
+        finally:
+            conn.close()
+
+        assert before_rows == 2
+        assert after_rows == 2
+        mock_run.assert_not_called()
 
 
 class TestMainFunction:
@@ -231,17 +275,24 @@ class TestMainFunction:
         _build_dbt_database(db_path)
         monkeypatch.chdir(BACKEND_DIR)
 
-        with mock.patch(
-            "funding_backtester.scripts.build_indicator_features.build_indicator_feature_stage"
-        ) as mock_stage, mock.patch("subprocess.run") as mock_run:
+        with (
+            mock.patch(
+                "funding_backtester.scripts.build_indicator_features.build_indicator_feature_stage"
+            ) as mock_stage,
+            mock.patch("subprocess.run") as mock_run,
+        ):
             mock_stage.return_value = 2
             mock_run.return_value.returncode = 0
             rc = main(
                 argv=[
-                    "--duckdb-path", str(db_path),
-                    "--source-model", "ohlcv_15s",
-                    "--timeframe", "15s",
-                    "--feature-names", "sma",
+                    "--duckdb-path",
+                    str(db_path),
+                    "--source-model",
+                    "ohlcv_15s",
+                    "--timeframe",
+                    "15s",
+                    "--feature-names",
+                    "sma",
                 ]
             )
 
@@ -255,20 +306,23 @@ class TestMainFunction:
 
         rc = main(
             argv=[
-                "--duckdb-path", str(db_path),
-                "--source-model", "ohlcv_15s",
-                "--timeframe", "15s",
-                "--feature-names", "sma",
-                "--dbt-project-dir", str(DBT_PROJECT),
+                "--duckdb-path",
+                str(db_path),
+                "--source-model",
+                "ohlcv_15s",
+                "--timeframe",
+                "15s",
+                "--feature-names",
+                "sma",
+                "--dbt-project-dir",
+                str(DBT_PROJECT),
             ]
         )
 
         assert rc == 0
         conn = duckdb.connect(str(db_path))
         try:
-            stage_rows = conn.execute(
-                "SELECT COUNT(*) FROM indicator_feature_stage"
-            ).fetchone()[0]
+            stage_rows = conn.execute("SELECT COUNT(*) FROM indicator_feature_stage").fetchone()[0]
         finally:
             conn.close()
         assert stage_rows == 2
@@ -280,21 +334,24 @@ class TestMainFunction:
 
         rc = main(
             argv=[
-                "--duckdb-path", str(db_path),
-                "--source-model", "ohlcv_15s",
-                "--timeframe", "15s",
-                "--feature-names", "sma",
+                "--duckdb-path",
+                str(db_path),
+                "--source-model",
+                "ohlcv_15s",
+                "--timeframe",
+                "15s",
+                "--feature-names",
+                "sma",
                 "--skip-dbt",
-                "--dbt-project-dir", str(DBT_PROJECT),
+                "--dbt-project-dir",
+                str(DBT_PROJECT),
             ]
         )
 
         assert rc == 0
         conn = duckdb.connect(str(db_path))
         try:
-            stage_rows = conn.execute(
-                "SELECT COUNT(*) FROM indicator_feature_stage"
-            ).fetchone()[0]
+            stage_rows = conn.execute("SELECT COUNT(*) FROM indicator_feature_stage").fetchone()[0]
         finally:
             conn.close()
         assert stage_rows == 2
@@ -306,20 +363,23 @@ class TestMainFunction:
 
         rc = main(
             argv=[
-                "--duckdb-path", str(db_path),
-                "--source-model", "ohlcv_15s",
-                "--timeframe", "15s",
-                "--feature-names", "sma,ema,rsi",
-                "--dbt-project-dir", str(DBT_PROJECT),
+                "--duckdb-path",
+                str(db_path),
+                "--source-model",
+                "ohlcv_15s",
+                "--timeframe",
+                "15s",
+                "--feature-names",
+                "sma,ema,rsi",
+                "--dbt-project-dir",
+                str(DBT_PROJECT),
             ]
         )
 
         assert rc == 0
         conn = duckdb.connect(str(db_path))
         try:
-            stage_rows = conn.execute(
-                "SELECT COUNT(*) FROM indicator_feature_stage"
-            ).fetchone()[0]
+            stage_rows = conn.execute("SELECT COUNT(*) FROM indicator_feature_stage").fetchone()[0]
         finally:
             conn.close()
         assert stage_rows == 6
@@ -329,17 +389,20 @@ class TestMainFunction:
         db_path = tmp_path / "fake_build_test.duckdb"
         _build_dbt_database(db_path)
 
-        with mock.patch(
-            "funding_backtester.scripts.build_indicator_features.build"
-        ) as mock_build:
+        with mock.patch("funding_backtester.scripts.build_indicator_features.build") as mock_build:
             mock_build.side_effect = subprocess.CalledProcessError(1, ["dbt"])
             rc = main(
                 argv=[
-                    "--duckdb-path", str(db_path),
-                    "--source-model", "ohlcv_15s",
-                    "--timeframe", "15s",
-                    "--feature-names", "sma",
-                    "--dbt-project-dir", str(DBT_PROJECT),
+                    "--duckdb-path",
+                    str(db_path),
+                    "--source-model",
+                    "ohlcv_15s",
+                    "--timeframe",
+                    "15s",
+                    "--feature-names",
+                    "sma",
+                    "--dbt-project-dir",
+                    str(DBT_PROJECT),
                 ]
             )
 

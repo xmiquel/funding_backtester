@@ -1,4 +1,5 @@
 """Tests for the vectorbt-compatible indicator feature loader."""
+
 from __future__ import annotations
 
 import pathlib
@@ -64,6 +65,9 @@ def _seed_ohlcv_and_stage(conn: duckdb.DuckDBPyConnection) -> None:
         ('2024-01-03 09:30:15', 'ES', '15s', 'ohlcv_15s',
          'sma', 'fid_sma_es', 'phash_sma20', '{"length":20}', 'sma', 4501.0,
          '2024-01-03 09:30:15', 'indicator-layer-v1', '1.0.17', true, '0.6.8', true),
+        ('2024-01-03 09:30:00', 'ES', '15s', 'ohlcv_1m',
+         'ema', 'fid_ema_es_other', 'phash_ema21', '{"length":21}', 'ema', 9999.0,
+         '2024-01-03 09:30:00', 'indicator-layer-v1', '1.0.17', true, '0.6.8', true),
         ('2024-01-03 09:30:00', 'ES', '15s', 'ohlcv_15s',
          'rsi', 'fid_rsi_es', 'phash_rsi14', '{"length":14}', 'rsi', 55.5,
          '2024-01-03 09:30:00', 'indicator-layer-v1', '1.0.17', true, '0.6.8', true),
@@ -182,6 +186,23 @@ class TestLoadFeatures:
         assert list(features.columns) == ["sma_sma_phash_sma20"]
         assert len(features) == 2
 
+    def test_ignores_features_from_other_source_models(self, tmp_path: pathlib.Path) -> None:
+        """``load_features`` filters by source_model before pivoting features."""
+        db_path = tmp_path / "test_source_model_filter.duckdb"
+        conn = duckdb.connect(str(db_path))
+        _seed_ohlcv_and_stage(conn)
+        conn.close()
+
+        _, features = load_features(
+            database_path=db_path,
+            symbol="ES",
+            timeframe="15s",
+            source_model="ohlcv_15s",
+        )
+
+        assert "ema_ema_phash_ema21" not in features.columns
+        assert set(features.columns) == {"sma_sma_phash_sma20", "rsi_rsi_phash_rsi14"}
+
     def test_datetime_index_is_sorted(self, tmp_path: pathlib.Path) -> None:
         """Returned DataFrames have a monotonically increasing DatetimeIndex."""
         db_path = tmp_path / "test_sort.duckdb"
@@ -199,9 +220,7 @@ class TestLoadFeatures:
         assert close.index.is_monotonic_increasing
         assert features.index.is_monotonic_increasing
 
-    def test_multi_output_indicator_creates_separate_columns(
-        self, tmp_path: pathlib.Path
-    ) -> None:
+    def test_multi_output_indicator_creates_separate_columns(self, tmp_path: pathlib.Path) -> None:
         """Multi-output indicator (MACD) creates separate columns per output."""
         db_path = tmp_path / "test_multi.duckdb"
         conn = duckdb.connect(str(db_path))
@@ -258,9 +277,7 @@ class TestLoadFeatures:
         assert features.loc[features.index[0], "macd_macd_phash_macd"] == 10.5
         assert features.loc[features.index[0], "macd_macd_hist_phash_macd"] == 0.7
 
-    def test_close_and_features_aligned_on_common_timestamps(
-        self, tmp_path: pathlib.Path
-    ) -> None:
+    def test_close_and_features_aligned_on_common_timestamps(self, tmp_path: pathlib.Path) -> None:
         """Extra close rows without matching features are excluded."""
         db_path = tmp_path / "test_align.duckdb"
         conn = duckdb.connect(str(db_path))
@@ -294,9 +311,7 @@ class TestLoadFeatures:
             )
             """
         )
-        conn.execute(
-            "INSERT INTO ohlcv_15s VALUES ('2024-01-03 09:30:00', 'ES', 4500.5)"
-        )
+        conn.execute("INSERT INTO ohlcv_15s VALUES ('2024-01-03 09:30:00', 'ES', 4500.5)")
         conn.close()
 
         with pytest.raises(RuntimeError, match="indicator_feature_stage"):
