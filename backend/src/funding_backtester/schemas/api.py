@@ -32,6 +32,12 @@ class ValidationErrorResponse(BaseModel):
     detail: list[ValidationErrorDetail]
 
 
+class ErrorResponse(BaseModel):
+    """Generic error response wrapper for internal API failures."""
+
+    detail: str
+
+
 class OHLCVBar(BaseModel):
     """15-second OHLCV bar with bid/ask mirrors."""
 

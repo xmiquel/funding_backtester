@@ -128,17 +128,14 @@ class TestFeatureMetaEndpoint:
     async def test_meta_empty_when_duckdb_file_is_malformed(
         self, tmp_path, monkeypatch: pytest.MonkeyPatch
     ):
-        """A malformed DuckDB file is treated as an operational failure and returns empty arrays."""
+        """A malformed DuckDB file is treated as an internal error."""
         db_path = tmp_path / "malformed_features.duckdb"
         db_path.write_bytes(b"not a duckdb database")
         feature_client = _create_client(monkeypatch, str(db_path))
 
         response = await feature_client.get("/api/v1/features/meta")
-        assert response.status_code == 200
-        data = response.json()
-        assert data["symbols"] == []
-        assert data["timeframes"] == []
-        assert data["source_models"] == []
+        assert response.status_code == 500
+        assert response.json()["detail"] == "Failed to open DuckDB database"
 
     @pytest.mark.asyncio
     async def test_meta_returns_data_when_features_exist(self, feature_client_with_stage):
@@ -192,14 +189,90 @@ class TestFeatureQueryEndpoint:
     async def test_empty_result_when_duckdb_file_is_malformed(
         self, tmp_path, monkeypatch: pytest.MonkeyPatch
     ):
-        """A malformed DuckDB file returns empty results, not 500."""
+        """A malformed DuckDB file returns a consistent internal error."""
         db_path = tmp_path / "malformed_features.duckdb"
         db_path.write_bytes(b"not a duckdb database")
         feature_client = _create_client(monkeypatch, str(db_path))
 
         response = await feature_client.get("/api/v1/features?symbol=ES")
-        assert response.status_code == 200
-        assert response.json() == []
+        assert response.status_code == 500
+        assert response.json()["detail"] == "Failed to open DuckDB database"
+
+    @pytest.mark.asyncio
+    async def test_error_when_feature_row_schema_is_incompatible(
+        self, tmp_path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """An incompatible row schema is surfaced as a server error."""
+        db_path = str(tmp_path / "incompatible_features.duckdb")
+        conn = duckdb.connect(db_path)
+        conn.execute(
+            """
+            CREATE TABLE indicator_feature_stage (
+                datetime VARCHAR NOT NULL,
+                symbol VARCHAR NOT NULL,
+                timeframe VARCHAR NOT NULL,
+                source_model VARCHAR NOT NULL,
+                feature_name VARCHAR NOT NULL,
+                feature_id VARCHAR NOT NULL,
+                parameter_hash VARCHAR NOT NULL,
+                parameter_json VARCHAR NOT NULL,
+                output_name VARCHAR NOT NULL,
+                value DOUBLE,
+                computed_at TIMESTAMP NOT NULL,
+                computation_version VARCHAR NOT NULL,
+                pandas_ta_classic_version VARCHAR NOT NULL,
+                talib_available BOOLEAN NOT NULL,
+                talib_version VARCHAR,
+                talib_used BOOLEAN NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO indicator_feature_stage VALUES
+            ('not-a-datetime', 'ES', '15s', 'ohlcv_15s', 'sma', 'fid-sma', 'hash-sma',
+             '{"length":20}', 'sma', 4510.25, '2026-03-15 09:30:15',
+             'indicator-layer-v1', '1.0.6', true, '0.6.8', false)
+            """
+        )
+        conn.close()
+        feature_client = _create_client(monkeypatch, db_path)
+
+        response = await feature_client.get("/api/v1/features?symbol=ES")
+        assert response.status_code == 500
+        assert response.json()["detail"] == "Failed to load feature rows from DuckDB"
+
+    @pytest.mark.asyncio
+    async def test_error_when_feature_table_schema_is_missing_query_columns(
+        self, tmp_path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """A present table with missing query columns returns a server error."""
+        db_path = str(tmp_path / "missing_columns_features.duckdb")
+        conn = duckdb.connect(db_path)
+        conn.execute(
+            """
+            CREATE TABLE indicator_feature_stage (
+                datetime TIMESTAMP NOT NULL,
+                feature_name VARCHAR NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO indicator_feature_stage VALUES
+            ('2026-03-15 09:30:00', 'sma')
+            """
+        )
+        conn.close()
+        feature_client = _create_client(monkeypatch, db_path)
+
+        meta_response = await feature_client.get("/api/v1/features/meta")
+        assert meta_response.status_code == 500
+        assert meta_response.json()["detail"] == "Failed to load feature metadata from DuckDB"
+
+        feature_response = await feature_client.get("/api/v1/features?symbol=ES")
+        assert feature_response.status_code == 500
+        assert feature_response.json()["detail"] == "Failed to load feature rows from DuckDB"
 
     @pytest.mark.asyncio
     async def test_returns_feature_rows(self, feature_client_with_stage):
@@ -298,7 +371,7 @@ def _create_client(monkeypatch, db_path):
     return AsyncClient(transport=transport, base_url="http://test")
 
 
-def _populate_stage_table(conn, talib_version: str | None = '0.6.8'):
+def _populate_stage_table(conn, talib_version: str | None = "0.6.8"):
     """Insert sample feature data into indicator_feature_stage."""
     conn.execute("""
         CREATE TABLE indicator_feature_stage (
@@ -350,18 +423,18 @@ async def test_feature_row_serializes_empty_talib_version_as_null(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ):
     """Empty talib_version values are returned as JSON null."""
-    db_path = str(tmp_path / 'empty_talib_version.duckdb')
+    db_path = str(tmp_path / "empty_talib_version.duckdb")
     conn = duckdb.connect(db_path)
-    _populate_stage_table(conn, talib_version='')
+    _populate_stage_table(conn, talib_version="")
     conn.close()
 
     feature_client = _create_client(monkeypatch, db_path)
-    response = await feature_client.get('/api/v1/features?symbol=ES')
+    response = await feature_client.get("/api/v1/features?symbol=ES")
 
     assert response.status_code == 200
     data = response.json()
     assert len(data) > 0
-    assert data[0]['talib_version'] is None
+    assert data[0]["talib_version"] is None
 
 
 @pytest.fixture

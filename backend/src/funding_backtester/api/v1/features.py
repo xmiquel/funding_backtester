@@ -12,11 +12,12 @@ import logging
 import os
 from collections.abc import AsyncGenerator
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from funding_backtester.config import settings
 from funding_backtester.indicators.parameters import INDICATOR_CATALOG
 from funding_backtester.schemas.api import (
+    ErrorResponse,
     FeatureCatalogEntry,
     FeatureMetaResponse,
     FeatureRow,
@@ -37,10 +38,12 @@ async def _get_db() -> AsyncGenerator[DuckDBClient | None]:
         return
     try:
         db = await asyncio.to_thread(DuckDBClient, settings.duckdb_path)
-    except Exception:
+    except Exception as exc:
         logger.exception("Failed to open DuckDB database at %s", settings.duckdb_path)
-        yield None
-        return
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to open DuckDB database",
+        ) from exc
     try:
         yield db
     finally:
@@ -186,24 +189,24 @@ def _row_to_feature(row: tuple[object, ...]) -> FeatureRow:
     ) = row
 
     return FeatureRow(
-        datetime=_require_datetime(datetime_value, 'datetime'),
-        symbol=_require_str(symbol, 'symbol'),
-        timeframe=_require_str(timeframe, 'timeframe'),
-        source_model=_require_str(source_model, 'source_model'),
-        feature_name=_require_str(feature_name, 'feature_name'),
-        feature_id=_require_str(feature_id, 'feature_id'),
-        parameter_hash=_require_str(parameter_hash, 'parameter_hash'),
-        parameter_json=_require_str(parameter_json, 'parameter_json'),
-        output_name=_require_str(output_name, 'output_name'),
-        value=_require_optional_float(value, 'value'),
-        computed_at=_require_datetime(computed_at, 'computed_at'),
-        computation_version=_require_str(computation_version, 'computation_version'),
+        datetime=_require_datetime(datetime_value, "datetime"),
+        symbol=_require_str(symbol, "symbol"),
+        timeframe=_require_str(timeframe, "timeframe"),
+        source_model=_require_str(source_model, "source_model"),
+        feature_name=_require_str(feature_name, "feature_name"),
+        feature_id=_require_str(feature_id, "feature_id"),
+        parameter_hash=_require_str(parameter_hash, "parameter_hash"),
+        parameter_json=_require_str(parameter_json, "parameter_json"),
+        output_name=_require_str(output_name, "output_name"),
+        value=_require_optional_float(value, "value"),
+        computed_at=_require_datetime(computed_at, "computed_at"),
+        computation_version=_require_str(computation_version, "computation_version"),
         pandas_ta_classic_version=_require_str(
-            pandas_ta_classic_version, 'pandas_ta_classic_version'
+            pandas_ta_classic_version, "pandas_ta_classic_version"
         ),
-        talib_available=_require_bool(talib_available, 'talib_available'),
-        talib_version=_require_optional_str(talib_version, 'talib_version') or None,
-        talib_used=_require_bool(talib_used, 'talib_used'),
+        talib_available=_require_bool(talib_available, "talib_available"),
+        talib_version=_require_optional_str(talib_version, "talib_version") or None,
+        talib_used=_require_bool(talib_used, "talib_used"),
     )
 
 
@@ -238,7 +241,11 @@ async def get_feature_catalog() -> list[FeatureCatalogEntry]:
     ]
 
 
-@router.get("/features/meta", response_model=FeatureMetaResponse)
+@router.get(
+    "/features/meta",
+    response_model=FeatureMetaResponse,
+    responses={500: {"model": ErrorResponse, "description": "DuckDB failure"}},
+)
 async def get_feature_meta(
     db: DuckDBClient | None = Depends(_get_db),  # noqa: B008
 ) -> FeatureMetaResponse:
@@ -254,9 +261,12 @@ async def get_feature_meta(
         rows = await db.query(
             f"SELECT DISTINCT symbol, timeframe, source_model FROM {table}"  # nosec B608
         )
-    except Exception:
+    except Exception as exc:
         logger.exception("Failed to load feature metadata from DuckDB")
-        return FeatureMetaResponse(symbols=[], timeframes=[], source_models=[])
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to load feature metadata from DuckDB",
+        ) from exc
 
     symbols: set[str] = set()
     timeframes: set[str] = set()
@@ -272,7 +282,11 @@ async def get_feature_meta(
     )
 
 
-@router.get("/features", response_model=list[FeatureRow])
+@router.get(
+    "/features",
+    response_model=list[FeatureRow],
+    responses={500: {"model": ErrorResponse, "description": "DuckDB failure"}},
+)
 async def get_features(
     db: DuckDBClient | None = Depends(_get_db),  # noqa: B008
     symbol: str = Query(..., description="Futures contract symbol"),  # noqa: B008
@@ -297,6 +311,9 @@ async def get_features(
             return []
 
         return await _execute_feature_query(db, table, symbol, timeframe, feature_name)
-    except Exception:
+    except Exception as exc:
         logger.exception("Failed to load feature rows from DuckDB")
-        return []
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to load feature rows from DuckDB",
+        ) from exc
