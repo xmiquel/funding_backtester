@@ -52,4 +52,6 @@ asyncio_mode = "auto"
 [tool.coverage.report]
 fail_under = 80
 
+[tool.hatch.build.targets.wheel]
+packages = ["src/funding_backtester"]
 

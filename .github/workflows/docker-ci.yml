@@ -3,10 +3,12 @@ name: Docker CI
 on:
   pull_request:
     paths:
-      - "Dockerfile"
-      - "docker-compose.yml"
-      - "backend/Dockerfile"
-      - "frontend/Dockerfile"
+      - ".github/workflows/docker-ci.yml"
+      - ".dockerignore"
+      - "analytics/**"
+      - "backend/**"
+      - "frontend/**"
+      - "docker/**"
   push:
     branches: [main]
 
@@ -15,5 +17,5 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: docker compose build
-      - run: docker compose run --rm backend uv run pytest
+      - run: docker compose -f docker/docker-compose.yml build
+      - run: docker compose -f docker/docker-compose.yml run --rm backend uv run pytest --cov --cov-fail-under=80 --ignore=tests/test_dbt_integration.py

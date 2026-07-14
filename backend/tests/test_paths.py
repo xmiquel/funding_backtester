@@ -8,6 +8,9 @@ from __future__ import annotations
 
 import pathlib
 
+import pytest
+
+import funding_backtester._paths as paths_module
 from funding_backtester._paths import _find_repo_root, duckdb_path
 
 
@@ -33,6 +36,25 @@ class TestFindRepoRoot:
         content = p.read_text()
         assert "[project]" in content
         assert 'name = "funding_backtester"' in content
+
+    def test_duckdb_path_falls_back_without_git_when_backend_pyproject_exists(
+        self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """duckdb_path falls back in a tree without .git when backend pyproject exists."""
+        repo_root = tmp_path / "repo"
+        package_dir = repo_root / "backend" / "src" / "funding_backtester"
+        package_dir.mkdir(parents=True)
+        (repo_root / "backend" / "pyproject.toml").write_text(
+            "[project]\nname = 'funding_backtester'\n"
+        )
+        fake_file = package_dir / "_paths.py"
+        fake_file.write_text("")
+
+        monkeypatch.setattr(paths_module, "__file__", str(fake_file))
+
+        result = paths_module.duckdb_path()
+        assert result == repo_root / "backend" / "data" / "ticks.duckdb"
+        assert not (repo_root / ".git").exists()
 
 
 class TestDuckdbPath:

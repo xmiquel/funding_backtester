@@ -9,6 +9,7 @@ on:
 
 jobs:
   quality:
+    name: Backend CI / quality
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -26,6 +27,7 @@ jobs:
       - run: uv run safety check
 
   test:
+    name: Backend CI / test
     needs: quality
     runs-on: ubuntu-latest
     defaults:
