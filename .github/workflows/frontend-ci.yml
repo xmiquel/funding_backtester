@@ -8,6 +8,7 @@ on:
 
 jobs:
   quality:
+    name: Frontend CI / quality
     runs-on: ubuntu-latest
     defaults:
       run:
