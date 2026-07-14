@@ -1,0 +1,5 @@
+*
+!backend/
+!backend/**
+!analytics/
+!analytics/**

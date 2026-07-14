@@ -16,9 +16,9 @@ def _find_repo_root() -> Path:
     """Walk up from this file's directory until the repo root is found.
 
     The repo root is identified by the presence of both a ``.git`` directory
-    and a ``backend/pyproject.toml`` file. This avoids confusion when
-    ``pyproject.toml`` lives in a subdirectory (e.g. ``backend/``) rather
-    than at the root.
+    and a backend project file. When the code is running from a packaged
+    Docker image without the Git metadata, it falls back to the nearest
+    directory containing ``pyproject.toml``.
 
     Raises:
         FileNotFoundError: if the repo root cannot be determined.
@@ -27,9 +27,16 @@ def _find_repo_root() -> Path:
         Absolute :class:`Path` to the repository root directory.
     """
     current = Path(__file__).resolve().parent
+    fallback_root: Path | None = None
     for parent in [current] + list(current.parents):
-        if (parent / ".git").is_dir() and (parent / "backend" / "pyproject.toml").exists():
+        if (parent / ".git").is_dir() and (
+            (parent / "backend" / "pyproject.toml").exists() or (parent / "pyproject.toml").exists()
+        ):
             return parent
+        if fallback_root is None and (parent / "pyproject.toml").exists():
+            fallback_root = parent
+    if fallback_root is not None:
+        return fallback_root
     raise FileNotFoundError("Could not find repo root (looking for .git/ + backend/pyproject.toml)")
 
 
