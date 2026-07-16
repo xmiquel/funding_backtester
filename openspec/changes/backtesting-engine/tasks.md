@@ -4,37 +4,40 @@
 
 | Field | Value |
 |-------|-------|
-| Estimated changed lines | 650-900 |
-| 400-line budget risk | High |
+| Estimated changed lines | 220-320 |
+| 400-line budget risk | Low |
 | Chained PRs recommended | Yes |
-| Suggested split | PR 1: contracts + pure engine + unit tests; PR 2: DuckDB I/O + marts + integration tests; PR 3: CLI wiring + verification/docs |
-| Delivery strategy | auto-forecast |
-| Chain strategy | pending |
+| Suggested split | PR 1: typed contracts + pure MA signal generation + unit tests; PR 2: execution/fills/run identity/costs + unit tests; PR 3: DuckDB I/O + marts + integration tests; PR 4: CLI wiring + verification/docs |
+| Delivery strategy | feature-branch-chain |
+| Chain strategy | feature-branch-chain |
 
 Decision needed before apply: No
 Chained PRs recommended: Yes
-Chain strategy: pending
-400-line budget risk: High
+Chain strategy: feature-branch-chain
+400-line budget risk: Low
 
 ### Suggested Work Units
 
 | Unit | Goal | Likely PR | Notes |
 |------|------|-----------|-------|
-| 1 | RED/GREEN for engine contracts and MA crossover core | PR 1 | Base: feature/tracker branch; unit tests first |
-| 2 | DuckDB stage-to-mart persistence and schema docs | PR 2 | Base: PR 1 branch; temp DuckDB integration tests |
-| 3 | CLI wiring and offline verification | PR 3 | Base: PR 2 branch; same-symbol deterministic run |
+| 1 | RED/GREEN for typed contracts and pure MA signal core | PR 1 | Base: feature/tracker branch; unit tests first |
+| 2 | Next-bar-open execution, fills, identity, and costs | PR 2 | Base: PR 1 branch; deterministic execution tests |
+| 3 | DuckDB stage-to-mart persistence and schema docs | PR 3 | Base: PR 2 branch; temp DuckDB integration tests |
+| 4 | CLI wiring and offline verification | PR 4 | Base: PR 3 branch; same-symbol deterministic run |
 
-## Phase 1: RED — contracts and engine tests
+## Phase 1 — contracts and signal tests
 
-- [ ] 1.1 Add failing tests in `backend/tests/test_backtesting_engine.py` for next-bar-open fills, missing final bar, and negative cost/slippage rejection.
+- [x] 1.1 Add behavioral tests in `backend/tests/test_backtesting_engine.py` for typed contract validation and MA crossover signal generation.
 - [ ] 1.2 Add failing tests in `backend/tests/test_backtesting_duckdb_io.py` for stage-to-mart writes, `run_id` linkage, and versioned reruns.
 - [ ] 1.3 Add failing CLI/schema tests for `backend/src/funding_backtester/scripts/run_backtest.py` argument validation and unsupported strategy errors.
 
-## Phase 2: GREEN — backtesting core
+## Phase 2: GREEN — backtesting core slice 1
 
-- [ ] 2.1 Create `backend/src/funding_backtester/backtesting/contracts.py` with run, trade, metadata, and validation error contracts.
-- [ ] 2.2 Create `backend/src/funding_backtester/backtesting/strategy.py` and `engine.py` for MA crossover signals and deterministic next-bar-open execution.
-- [ ] 2.3 Add `backend/src/funding_backtester/backtesting/__init__.py` exports and `backend/src/funding_backtester/schemas/backtesting.py` for typed CLI/persistence payloads.
+- [x] 2.1 Create `backend/src/funding_backtester/backtesting/contracts.py` with typed config/metadata contracts and validation errors for the signal layer.
+- [x] 2.2 Create `backend/src/funding_backtester/backtesting/strategy.py` for pure MA crossover signals.
+- [x] 2.3 Add `backend/src/funding_backtester/backtesting/__init__.py` exports for the backtesting core symbols.
+- [ ] 2.4 Create `backend/src/funding_backtester/schemas/backtesting.py` for typed CLI/persistence payloads.
+- [ ] 2.5 Create `backend/src/funding_backtester/backtesting/engine.py` for next-bar-open execution, fills, run identity, and costs (PR 2).
 
 ## Phase 3: Integration / Wiring
 
@@ -44,7 +47,7 @@ Chain strategy: pending
 
 ## Phase 4: Testing / Verification
 
-- [ ] 4.1 Make `backend/tests/test_backtesting_engine.py` pass against small deterministic fixtures.
+- [x] 4.1 Make `backend/tests/test_backtesting_engine.py` pass against typed-contract and signal-layer fixtures.
 - [ ] 4.2 Make `backend/tests/test_backtesting_duckdb_io.py` pass with a temp DuckDB database and rerun assertions.
 - [ ] 4.3 Verify CLI and dbt marts together with an offline snapshot run using the same symbol/timeframe.
 
@@ -52,3 +55,10 @@ Chain strategy: pending
 
 - [ ] 5.1 Update `backend/src/funding_backtester/backtesting/__init__.py` and script docstrings with supported scope and limits.
 - [ ] 5.2 Remove temporary fixture helpers or debug prints after tests pass.
+
+## PR1 Reliability Remediation
+
+- [x] R1.1 Add `_validate_decimal` and normalize non-finite Decimal and contract type/value failures to `BacktestValidationError`.
+- [x] R1.2 Make `_freeze_parameter_value` reject unsupported mutable parameter values while recursively freezing supported containers.
+- [x] R1.3 Add `_validate_temporal_index` and reject non-temporal, unordered, or duplicate signal indexes before calculation.
+- [x] R1.4 Cover the remediation behaviors in `backend/tests/test_backtesting_engine.py` and record factual TDD evidence in `apply-progress.md`.
