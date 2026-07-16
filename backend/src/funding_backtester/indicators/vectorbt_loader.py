@@ -16,9 +16,7 @@ import re
 from pathlib import Path
 
 import duckdb
-import pandas as pd  # type: ignore[import-untyped]
-
-# No están instalados los stubs de pandas; duckdb.df() devuelve un DataFrame sin tipado.
+import pandas as pd
 
 _SOURCE_MODEL_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _FEATURE_TABLE_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -53,11 +51,12 @@ def load_features(
         database_path: Ruta al archivo de base de datos DuckDB.
         symbol: Símbolo de trading a filtrar (por ejemplo, ``"ES"``).
         timeframe: Cadena de marco temporal (por ejemplo, ``"15s"``).
-        source_model: Nombre del modelo OHLCV de origen usado para obtener los precios de cierre.
+        source_model: Nombre del modelo OHLCV de origen usado para obtener
+            los precios de cierre.
         feature_names: Subconjunto opcional de nombres de features. Cuando es *None*,
             se devuelven todas las features disponibles para el símbolo y el timeframe.
-        feature_table: Nombre de la tabla o vista de DuckDB que contiene filas largas de
-            features de indicadores.
+        feature_table: Nombre de la tabla o vista de DuckDB que contiene
+            filas largas de features de indicadores.
 
     Returns:
         Tupla ``(close, features)``:
