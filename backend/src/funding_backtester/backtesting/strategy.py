@@ -22,6 +22,12 @@ def build_signal_frame(
     fast_window: int,
     slow_window: int,
 ) -> pd.DataFrame:
+    """Return close, moving averages, and close-time crossover signals.
+
+    ``close`` must be a non-decreasing, unique ``DatetimeIndex`` series. The
+    returned boolean signals are evaluated on the current close; the execution
+    layer is responsible for applying them to the following open.
+    """
     _validate_temporal_index(close)
     validate_window_pair(fast_window, slow_window)
 

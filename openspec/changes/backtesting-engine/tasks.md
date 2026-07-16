@@ -37,7 +37,7 @@ Chain strategy: feature-branch-chain
 - [x] 2.2 Create `backend/src/funding_backtester/backtesting/strategy.py` for pure MA crossover signals.
 - [x] 2.3 Add `backend/src/funding_backtester/backtesting/__init__.py` exports for the backtesting core symbols.
 - [ ] 2.4 Create `backend/src/funding_backtester/schemas/backtesting.py` for typed CLI/persistence payloads.
-- [ ] 2.5 Create `backend/src/funding_backtester/backtesting/engine.py` for next-bar-open execution, fills, run identity, and costs (PR 2).
+- [x] 2.5 Create `backend/src/funding_backtester/backtesting/engine.py` for next-bar-open execution, fills, run identity, and costs (PR 2).
 
 ## Phase 3: Integration / Wiring
 
@@ -56,9 +56,23 @@ Chain strategy: feature-branch-chain
 - [ ] 5.1 Update `backend/src/funding_backtester/backtesting/__init__.py` and script docstrings with supported scope and limits.
 - [ ] 5.2 Remove temporary fixture helpers or debug prints after tests pass.
 
+## PR2 Autonomous Slice: deterministic execution
+
+- [x] PR2.1 Add behavioral tests for next-bar-open fills, missing final bars, deterministic run identity, and cost/slippage effects.
+- [x] PR2.2 Implement pure next-bar-open execution with long entry/exit fills and explicit Decimal costs.
+- [x] PR2.3 Add immutable run summary, fill, trade, and result contracts with reproducibility metadata linkage.
+- [x] PR2.4 Verify the focused engine test suite, Ruff, and mypy; keep DuckDB, marts, CLI, dbt, and frontend out of scope.
+
 ## PR1 Reliability Remediation
 
 - [x] R1.1 Add `_validate_decimal` and normalize non-finite Decimal and contract type/value failures to `BacktestValidationError`.
 - [x] R1.2 Make `_freeze_parameter_value` reject unsupported mutable parameter values while recursively freezing supported containers.
 - [x] R1.3 Add `_validate_temporal_index` and reject non-temporal, unordered, or duplicate signal indexes before calculation.
 - [x] R1.4 Cover the remediation behaviors in `backend/tests/test_backtesting_engine.py` and record factual TDD evidence in `apply-progress.md`.
+
+## PR2 Reliability Remediation
+
+- [x] R2.1 Reject bytes, non-string metadata keys, key collisions, and non-finite floats with `BacktestValidationError` before run identity generation.
+- [x] R2.2 Validate non-empty, aligned, numeric, finite, non-negative open prices before execution.
+- [x] R2.3 Document and test final-position behavior: an open position remains unclosed and is excluded from completed trades.
+- [x] R2.4 Document the public execution and exported contract semantics without expanding into CLI or PR4 documentation.
