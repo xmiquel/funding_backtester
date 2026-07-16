@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from math import inf, nan
 from typing import cast
 
 import pandas as pd
@@ -13,6 +14,7 @@ from funding_backtester.backtesting.contracts import (
     BacktestValidationError,
     validate_window_pair,
 )
+from funding_backtester.backtesting.engine import execute_next_bar_open
 from funding_backtester.backtesting.strategy import build_signal_frame
 
 
@@ -28,9 +30,14 @@ def test_backtesting_public_api_exports() -> None:
     assert backtesting.build_signal_frame is build_signal_frame
     assert backtesting.__all__ == [
         "BacktestConfig",
+        "BacktestFill",
         "BacktestMetadata",
+        "BacktestResult",
+        "BacktestRunSummary",
+        "BacktestTrade",
         "BacktestValidationError",
         "build_signal_frame",
+        "execute_next_bar_open",
     ]
 
 
@@ -117,6 +124,28 @@ def test_backtest_metadata_rejects_unsupported_mutable_parameter_values() -> Non
             input_snapshot_id="snapshot-123",
             code_revision="abc123",
             parameters={"custom": MutableParameter(2)},
+        )
+
+
+@pytest.mark.parametrize(
+    "parameters",
+    [
+        {"payload": b"binary"},
+        {"payload": nan},
+        {"payload": inf},
+        {1: "numeric key"},
+        {1: "one", "1": "string one"},
+        {"nested": {2: "numeric key"}},
+    ],
+)
+def test_backtest_metadata_rejects_values_and_keys_that_cannot_be_canonicalized(
+    parameters: dict[object, object],
+) -> None:
+    with pytest.raises(BacktestValidationError, match="parameters"):
+        BacktestMetadata(
+            input_snapshot_id="snapshot-123",
+            code_revision="abc123",
+            parameters=parameters,
         )
 
 
@@ -378,3 +407,155 @@ def test_build_signal_frame_rejects_non_temporal_index() -> None:
 
     with pytest.raises(BacktestValidationError, match="DatetimeIndex"):
         build_signal_frame(close, fast_window=2, slow_window=3)
+
+
+def _execution_inputs() -> tuple[pd.Series, pd.Series, BacktestConfig, BacktestMetadata]:
+    index = pd.date_range("2026-01-01", periods=8, freq="15s")
+    close = pd.Series([1, 1, 1, 2, 3, 4, 1, 0], index=index)
+    open_prices = pd.Series([100, 100, 100, 100, 110, 120, 90, 80], index=index)
+    config = BacktestConfig(
+        source_model="ohlcv_15s",
+        symbol="ES",
+        timeframe="15s",
+        fast_window=2,
+        slow_window=3,
+        commission_bps=Decimal("10"),
+        slippage_bps=Decimal("5"),
+        initial_cash=Decimal("10000"),
+    )
+    metadata = BacktestMetadata(input_snapshot_id="snapshot-123", code_revision="abc123")
+    return close, open_prices, config, metadata
+
+
+def test_execute_next_bar_open_fills_crossover_on_following_open_with_costs() -> None:
+    close, open_prices, config, metadata = _execution_inputs()
+
+    result = execute_next_bar_open(close, open_prices, config=config, metadata=metadata)
+
+    assert result.summary.run_id == "run-0858586d4df1770a"
+    assert [(fill.side, fill.signal_timestamp, fill.fill_timestamp) for fill in result.fills] == [
+        ("buy", close.index[3], close.index[4]),
+        ("sell", close.index[6], close.index[7]),
+    ]
+    assert result.fills[0].fill_price == Decimal("110.055")
+    assert result.fills[0].commission == Decimal("0.110055")
+    assert result.trades[0].net_pnl == Decimal("-30.285015")
+
+
+def test_execute_next_bar_open_reports_signal_without_next_bar() -> None:
+    index = pd.date_range("2026-01-01", periods=6, freq="15s")
+    close = pd.Series([3, 2, 1, 1, 1, 2], index=index)
+    open_prices = pd.Series([10, 10, 10, 10, 10, 20], index=index)
+    config = BacktestConfig(
+        source_model="ohlcv_15s",
+        symbol="ES",
+        timeframe="15s",
+        fast_window=2,
+        slow_window=3,
+        commission_bps=Decimal("0"),
+        slippage_bps=Decimal("0"),
+        initial_cash=Decimal("10000"),
+    )
+    metadata = BacktestMetadata(input_snapshot_id="snapshot-123", code_revision="abc123")
+
+    result = execute_next_bar_open(close, open_prices, config=config, metadata=metadata)
+
+    assert result.fills == ()
+    assert result.unfilled_signals == (("buy", index[-1]),)
+
+
+def test_execute_next_bar_open_leaves_final_position_open_without_synthetic_exit() -> None:
+    index = pd.date_range("2026-01-01", periods=6, freq="15s")
+    close = pd.Series([1, 1, 1, 2, 3, 4], index=index)
+    open_prices = pd.Series([100, 100, 100, 100, 110, 120], index=index)
+    config = BacktestConfig(
+        source_model="ohlcv_15s",
+        symbol="ES",
+        timeframe="15s",
+        fast_window=2,
+        slow_window=3,
+        commission_bps=Decimal("0"),
+        slippage_bps=Decimal("0"),
+        initial_cash=Decimal("10000"),
+    )
+    metadata = BacktestMetadata(input_snapshot_id="snapshot-123", code_revision="abc123")
+
+    result = execute_next_bar_open(close, open_prices, config=config, metadata=metadata)
+
+    assert [(fill.side, fill.fill_timestamp) for fill in result.fills] == [("buy", index[4])]
+    assert result.trades == ()
+    assert result.unfilled_signals == ()
+
+
+@pytest.mark.parametrize(
+    "open_prices",
+    [
+        pd.Series(dtype="float64"),
+        pd.Series([100, 101], index=pd.date_range("2026-01-01", periods=2, freq="15s")),
+        pd.Series([100, "invalid"], index=pd.date_range("2026-01-01", periods=2, freq="15s")),
+        pd.Series([100, nan], index=pd.date_range("2026-01-01", periods=2, freq="15s")),
+        pd.Series([100, -1], index=pd.date_range("2026-01-01", periods=2, freq="15s")),
+    ],
+)
+def test_execute_next_bar_open_rejects_invalid_open_prices(open_prices: pd.Series) -> None:
+    close, _, config, metadata = _execution_inputs()
+
+    with pytest.raises(BacktestValidationError, match="open_prices"):
+        execute_next_bar_open(close, open_prices, config=config, metadata=metadata)
+
+
+def test_execute_next_bar_open_rejects_non_series_close_before_index_access() -> None:
+    _, open_prices, config, metadata = _execution_inputs()
+
+    with pytest.raises(BacktestValidationError, match="close"):
+        execute_next_bar_open(
+            cast(pd.Series, [1, 2]), open_prices, config=config, metadata=metadata
+        )
+
+
+def test_execute_next_bar_open_rejects_incompatible_open_price_index() -> None:
+    close, open_prices, config, metadata = _execution_inputs()
+    incompatible = open_prices.rename(
+        index={open_prices.index[0]: open_prices.index[0] + pd.Timedelta(seconds=1)}
+    )
+
+    with pytest.raises(BacktestValidationError, match="same index"):
+        execute_next_bar_open(close, incompatible, config=config, metadata=metadata)
+
+
+def test_execute_next_bar_open_is_deterministic_for_same_inputs() -> None:
+    close, open_prices, config, metadata = _execution_inputs()
+
+    first = execute_next_bar_open(close, open_prices, config=config, metadata=metadata)
+    second = execute_next_bar_open(close, open_prices, config=config, metadata=metadata)
+
+    assert first == second
+
+
+def test_execute_next_bar_open_canonicalizes_frozenset_metadata_deterministically() -> None:
+    close, open_prices, config, metadata = _execution_inputs()
+    metadata_with_frozenset = BacktestMetadata(
+        input_snapshot_id=metadata.input_snapshot_id,
+        code_revision=metadata.code_revision,
+        parameters={"symbols": frozenset({"ES", "NQ"})},
+    )
+    metadata_with_reordered_frozenset = BacktestMetadata(
+        input_snapshot_id=metadata.input_snapshot_id,
+        code_revision=metadata.code_revision,
+        parameters={"symbols": frozenset({"NQ", "ES"})},
+    )
+
+    first = execute_next_bar_open(
+        close,
+        open_prices,
+        config=config,
+        metadata=metadata_with_frozenset,
+    )
+    second = execute_next_bar_open(
+        close,
+        open_prices,
+        config=config,
+        metadata=metadata_with_reordered_frozenset,
+    )
+
+    assert first.summary.run_id == second.summary.run_id
