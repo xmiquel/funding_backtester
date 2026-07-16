@@ -17,11 +17,11 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import duckdb
 
-from funding_backtester.indicators.engine import compute_indicator_series
+from funding_backtester.indicators.engine import IndicatorFrame, compute_indicator_series
 from funding_backtester.indicators.parameters import (
     canonical_parameter_json,
     feature_id,
@@ -74,7 +74,7 @@ def build_indicator_feature_stage(
             SELECT datetime, symbol, open, high, low, close, volume
             FROM {source_model}
             ORDER BY symbol, datetime
-            """  # nosec B608 — source_model validado por la expresión regular de _validate_source_model
+            """  # nosec B608 — source_model validado por _validate_source_model
         ).df()
         if frame.empty:
             msg = (
@@ -91,7 +91,7 @@ def build_indicator_feature_stage(
             for request in requests:
                 result = compute_indicator_series(
                     request.name,
-                    ordered_frame,
+                    cast(IndicatorFrame, ordered_frame),
                     parameters=request.parameters,
                 )
                 feature_rows = _stage_rows(
