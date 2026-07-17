@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+from dataclasses import replace
 from decimal import Decimal
 from math import inf, nan
 from typing import cast
@@ -11,7 +13,12 @@ import funding_backtester.backtesting as backtesting
 from funding_backtester.backtesting.contracts import (
     BacktestConfig,
     BacktestMetadata,
+    BacktestResult,
+    BacktestResultValidationError,
+    BacktestRunSummary,
+    BacktestTrade,
     BacktestValidationError,
+    validate_backtest_result,
     validate_window_pair,
 )
 from funding_backtester.backtesting.engine import execute_next_bar_open
@@ -33,11 +40,13 @@ def test_backtesting_public_api_exports() -> None:
         "BacktestFill",
         "BacktestMetadata",
         "BacktestResult",
+        "BacktestResultValidationError",
         "BacktestRunSummary",
         "BacktestTrade",
         "BacktestValidationError",
         "build_signal_frame",
         "execute_next_bar_open",
+        "validate_backtest_result",
     ]
 
 
@@ -559,3 +568,103 @@ def test_execute_next_bar_open_canonicalizes_frozenset_metadata_deterministicall
     )
 
     assert first.summary.run_id == second.summary.run_id
+
+
+def _valid_result() -> BacktestResult:
+    entry_timestamp = pd.Timestamp("2026-01-01", tz="UTC").to_pydatetime()
+    exit_timestamp = pd.Timestamp("2026-01-01 00:01", tz="UTC").to_pydatetime()
+    summary = BacktestRunSummary(
+        run_id="run-valid",
+        schema_version="v1",
+        strategy_version="ma-crossover-v1",
+        input_snapshot_id="snapshot-123",
+        code_revision="abc123",
+        commission_bps=Decimal("1"),
+        slippage_bps=Decimal("0.5"),
+        unfilled_signal_count=0,
+    )
+    trade = BacktestTrade(
+        run_id="run-valid",
+        entry_timestamp=entry_timestamp,
+        exit_timestamp=exit_timestamp,
+        entry_price=Decimal("100"),
+        exit_price=Decimal("110"),
+        commission=Decimal("2"),
+        slippage=Decimal("1"),
+        net_pnl=Decimal("7"),
+    )
+    return BacktestResult(summary, (), (trade,), ())
+
+
+def test_validate_backtest_result_accepts_valid_trade() -> None:
+    assert validate_backtest_result(_valid_result()) is None
+
+
+@pytest.mark.parametrize("quantity", [Decimal("0"), Decimal("2")])
+def test_validate_backtest_result_requires_one_unit_trade_quantity(quantity: Decimal) -> None:
+    result = _valid_result()
+    invalid_trade = replace(result.trades[0], quantity=quantity)
+
+    with pytest.raises(BacktestValidationError, match="trade quantity must be exactly one unit"):
+        validate_backtest_result(replace(result, trades=(invalid_trade,)))
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda trade: replace(trade, run_id="other-run"),
+        lambda trade: replace(trade, entry_timestamp=trade.exit_timestamp),
+        lambda trade: replace(trade, entry_price=Decimal("NaN")),
+        lambda trade: replace(trade, commission=Decimal("-1")),
+        lambda trade: replace(trade, net_pnl=Decimal("8")),
+    ],
+)
+def test_validate_backtest_result_rejects_invalid_trade_invariants(
+    mutate: Callable[[BacktestTrade], BacktestTrade],
+) -> None:
+    result = _valid_result()
+    invalid_trade = mutate(result.trades[0])
+
+    with pytest.raises(BacktestValidationError):
+        validate_backtest_result(replace(result, trades=(invalid_trade,)))
+
+
+def test_validate_backtest_result_rejects_trade_count_mismatch() -> None:
+    result = _valid_result()
+    invalid_summary = replace(result.summary, unfilled_signal_count=1)
+
+    with pytest.raises(BacktestValidationError, match="unfilled signal count"):
+        validate_backtest_result(replace(result, summary=invalid_summary))
+
+
+@pytest.mark.parametrize(
+    ("unfilled_signals", "message"),
+    [
+        ((("buy",),), "unfilled signals must contain side and timestamp"),
+        (
+            (("hold", pd.Timestamp("2026-01-01", tz="UTC").to_pydatetime()),),
+            "unfilled signal side must be buy or sell",
+        ),
+        ((("buy", "not-a-timestamp"),), "unfilled signal timestamp"),
+    ],
+)
+def test_validate_backtest_result_rejects_invalid_unfilled_signals(
+    unfilled_signals: tuple[tuple[object, ...], ...], message: str
+) -> None:
+    result = _valid_result()
+    invalid_summary = replace(result.summary, unfilled_signal_count=1)
+
+    with pytest.raises(BacktestResultValidationError, match=message):
+        validate_backtest_result(
+            replace(result, summary=invalid_summary, unfilled_signals=unfilled_signals)
+        )
+
+
+@pytest.mark.parametrize("unfilled_signals", [None, []])
+def test_validate_backtest_result_rejects_non_tuple_unfilled_signals(
+    unfilled_signals: object,
+) -> None:
+    result = replace(_valid_result(), unfilled_signals=cast(tuple[object, ...], unfilled_signals))
+
+    with pytest.raises(BacktestResultValidationError, match="unfilled_signals must be a tuple"):
+        validate_backtest_result(result)

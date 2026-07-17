@@ -15,6 +15,12 @@ class BacktestValidationError(ValueError):
     pass
 
 
+class BacktestResultValidationError(BacktestValidationError):
+    """Raised when an execution result violates its public contract."""
+
+    pass
+
+
 def validate_window_pair(fast_window: int, slow_window: int) -> None:
     if (
         isinstance(fast_window, bool)
@@ -163,6 +169,7 @@ class BacktestTrade:
     commission: Decimal
     slippage: Decimal
     net_pnl: Decimal
+    quantity: Decimal = Decimal("1")
 
 
 @dataclass(frozen=True, slots=True)
@@ -173,3 +180,85 @@ class BacktestResult:
     fills: tuple[BacktestFill, ...]
     trades: tuple[BacktestTrade, ...]
     unfilled_signals: tuple[tuple[Literal["buy", "sell"], datetime], ...]
+
+
+def _validate_result_timestamp(field_name: str, value: object) -> datetime:
+    if not isinstance(value, datetime):
+        raise BacktestResultValidationError(f"{field_name} must be a datetime")
+    return value
+
+
+def _validate_result_decimal(field_name: str, value: object) -> Decimal:
+    if not isinstance(value, Decimal) or not value.is_finite():
+        raise BacktestResultValidationError(f"{field_name} must be a finite Decimal")
+    return value
+
+
+def _validate_result_text(field_name: str, value: object) -> None:
+    if not isinstance(value, str) or not value.strip():
+        raise BacktestResultValidationError(f"{field_name} must be non-empty")
+
+
+def _validate_trade(trade: BacktestTrade, run_id: str) -> None:
+    if not isinstance(trade.run_id, str) or not trade.run_id.strip() or trade.run_id != run_id:
+        raise BacktestResultValidationError("trade.run_id must match summary.run_id")
+    entry_timestamp = _validate_result_timestamp("trade.entry_timestamp", trade.entry_timestamp)
+    exit_timestamp = _validate_result_timestamp("trade.exit_timestamp", trade.exit_timestamp)
+    if entry_timestamp >= exit_timestamp:
+        raise BacktestResultValidationError("trade timestamps must be ordered")
+    entry_price = _validate_result_decimal("trade.entry_price", trade.entry_price)
+    exit_price = _validate_result_decimal("trade.exit_price", trade.exit_price)
+    commission = _validate_result_decimal("trade.commission", trade.commission)
+    slippage = _validate_result_decimal("trade.slippage", trade.slippage)
+    net_pnl = _validate_result_decimal("trade.net_pnl", trade.net_pnl)
+    quantity = _validate_result_decimal("trade.quantity", trade.quantity)
+    if min(entry_price, exit_price, commission, slippage, quantity) < 0:
+        raise BacktestResultValidationError(
+            "trade prices, costs, and quantity must be non-negative"
+        )
+    if quantity != Decimal("1"):
+        raise BacktestResultValidationError("trade quantity must be exactly one unit")
+    expected_pnl = (exit_price - entry_price) * quantity - commission - slippage
+    if net_pnl != expected_pnl:
+        raise BacktestResultValidationError("trade net_pnl does not match prices and costs")
+
+
+def validate_backtest_result(result: BacktestResult) -> None:
+    """Validate result-level invariants before downstream persistence."""
+    if not isinstance(result, BacktestResult):
+        raise BacktestResultValidationError("result must be a BacktestResult")
+    summary = result.summary
+    if not isinstance(summary, BacktestRunSummary):
+        raise BacktestResultValidationError("result.summary must be a BacktestRunSummary")
+    _validate_result_text("summary.run_id", summary.run_id)
+    _validate_result_text("summary.schema_version", summary.schema_version)
+    _validate_result_text("summary.strategy_version", summary.strategy_version)
+    _validate_result_text("summary.input_snapshot_id", summary.input_snapshot_id)
+    _validate_result_text("summary.code_revision", summary.code_revision)
+    for field_name in ("commission_bps", "slippage_bps"):
+        value = _validate_result_decimal(f"summary.{field_name}", getattr(summary, field_name))
+        if value < 0:
+            raise BacktestResultValidationError("summary costs must be non-negative")
+    if not isinstance(summary.unfilled_signal_count, int) or summary.unfilled_signal_count < 0:
+        raise BacktestResultValidationError("summary.unfilled_signal_count must be non-negative")
+    if not isinstance(result.fills, tuple) or not all(
+        isinstance(fill, BacktestFill) for fill in result.fills
+    ):
+        raise BacktestResultValidationError("result fills must be BacktestFill values")
+    if not isinstance(result.trades, tuple):
+        raise BacktestResultValidationError("result trades must be a tuple")
+    for trade in result.trades:
+        if not isinstance(trade, BacktestTrade):
+            raise BacktestResultValidationError("result trades must be BacktestTrade values")
+        _validate_trade(trade, summary.run_id)
+    if not isinstance(result.unfilled_signals, tuple):
+        raise BacktestResultValidationError("result.unfilled_signals must be a tuple")
+    if summary.unfilled_signal_count != len(result.unfilled_signals):
+        raise BacktestResultValidationError("unfilled signal count does not match results")
+    for signal in result.unfilled_signals:
+        if not isinstance(signal, tuple) or len(signal) != 2:
+            raise BacktestResultValidationError("unfilled signals must contain side and timestamp")
+        side, timestamp = signal
+        if side not in ("buy", "sell"):
+            raise BacktestResultValidationError("unfilled signal side must be buy or sell")
+        _validate_result_timestamp("unfilled signal timestamp", timestamp)
