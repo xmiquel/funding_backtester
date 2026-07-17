@@ -76,3 +76,11 @@ Chain strategy: feature-branch-chain
 - [x] R2.2 Validate non-empty, aligned, numeric, finite, non-negative open prices before execution.
 - [x] R2.3 Document and test final-position behavior: an open position remains unclosed and is excluded from completed trades.
 - [x] R2.4 Document the public execution and exported contract semantics without expanding into CLI or PR4 documentation.
+
+## PR3A1a Slice: Result / Trade Validation
+
+- [x] PR3A1a.1 Add the one-unit `BacktestTrade.quantity` contract.
+- [x] PR3A1a.2 Validate independent `BacktestTrade` timestamp, Decimal, linkage, quantity, and PnL invariants.
+- [x] PR3A1a.3 Validate `BacktestResult` structure, summary metadata, trade collection, and unfilled-signal count.
+- [x] PR3A1a.4 Add independent invariant tests without expanding public `BacktestFill` field validation.
+- [x] PR3A1a.5 Run the frozen development environment and focused/full test checks.
